@@ -6,9 +6,8 @@ Run with:  streamlit run app.py
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -26,16 +25,16 @@ except Exception:
 import db
 import garmin_sync
 import metrics
-from config import REFERENCE_MAINTENANCE_KCAL
+import ui
 
-st.set_page_config(page_title="Fitness Dashboard", page_icon="🏃", layout="wide")
-
+st.set_page_config(page_title="Fat-loss & Recovery", page_icon="🏃", layout="wide")
+ui.inject_css()
 db.init_db()
 
 
 # --- Range selector ------------------------------------------------------
 
-RANGES = {"2w": 14, "4w": 28, "8w": 56, "All": None}
+RANGES = {"2 weeks": 14, "4 weeks": 28, "8 weeks": 56, "All": None}
 
 
 def filter_range(df: pd.DataFrame, days: int | None) -> pd.DataFrame:
@@ -76,7 +75,7 @@ def _do_sync(client, full_backfill: bool):
         )
         bar.empty()
         st.session_state["sync_error"] = None
-        st.success(f"Synced {n} day(s) from Garmin.")
+        st.toast(f"Synced {n} day(s) from Garmin.", icon="✅")
     except Exception as exc:
         bar.empty()
         st.session_state["sync_error"] = str(exc)
@@ -87,9 +86,6 @@ def _do_sync(client, full_backfill: bool):
 
 GARMIN_AVAILABLE = garmin_sync.is_available()
 
-# Only auto-sync where Garmin is actually reachable (local machine with creds or
-# a cached token). On a cloud deploy this is skipped — the dashboard shows the
-# data that the local sync_job.py keeps current in the shared database.
 if GARMIN_AVAILABLE and "did_initial_sync" not in st.session_state:
     st.session_state["did_initial_sync"] = True
     with st.spinner("Checking Garmin for new data…"):
@@ -99,16 +95,13 @@ if GARMIN_AVAILABLE and "did_initial_sync" not in st.session_state:
 # --- Sidebar -------------------------------------------------------------
 
 with st.sidebar:
-    st.header("Controls")
-
-    selected_range = st.radio("Chart range", list(RANGES.keys()), index=1, horizontal=True)
+    st.markdown("### 🏃 Controls")
 
     if GARMIN_AVAILABLE:
-        if st.button("🔄 Sync Garmin now", use_container_width=True):
+        if st.button("🔄 Sync Garmin now", width="stretch", type="primary"):
             run_sync(full_backfill=False)
-
         with st.expander("Backfill last 90 days"):
-            if st.button("Run full backfill", use_container_width=True):
+            if st.button("Run full backfill", width="stretch"):
                 run_sync(full_backfill=True)
     else:
         st.info(
@@ -117,12 +110,11 @@ with st.sidebar:
             "log weight."
         )
 
-    # MFA completion flow (only shows when a login is mid-MFA).
     if st.session_state.get("mfa_pending"):
         st.divider()
         st.subheader("Garmin MFA")
         code = st.text_input("6-digit code", max_chars=10)
-        if st.button("Submit code", use_container_width=True):
+        if st.button("Submit code", width="stretch"):
             res = garmin_sync.resume_mfa(
                 st.session_state["mfa_client"], st.session_state["mfa_state"], code
             )
@@ -142,185 +134,223 @@ with st.sidebar:
 df = db.load_dataframe()
 df = metrics.add_weight_trend(df)
 
+latest_garmin = db.latest_garmin_date()
+synced_txt = f"Garmin synced through {latest_garmin}" if latest_garmin else "No Garmin data yet"
 
-# --- Weight entry (top, frictionless) -----------------------------------
 
-st.title("🏃 Fat-loss & Recovery")
+# --- Header + range selector --------------------------------------------
+
+hcol1, hcol2 = st.columns([3, 1.15], vertical_alignment="bottom")
+with hcol1:
+    ui.header("Fat-loss & Recovery",
+              "Weekly trend and recovery at a glance · cutting on ~2,850 kcal maintenance")
+with hcol2:
+    range_label = st.segmented_control(
+        "Range", list(RANGES.keys()), default="4 weeks",
+        selection_mode="single", label_visibility="collapsed",
+    ) or "4 weeks"
+st.caption(synced_txt)
+
+
+# --- Weight entry (frictionless) ----------------------------------------
 
 today_iso = date.today().isoformat()
 last_weight = db.latest_weight()
 prefill = last_weight if last_weight is not None else 87.0
 
-entry = st.container()
-with entry:
-    c1, c2, c3 = st.columns([2, 1, 3])
-    with c1:
+with st.container(border=True):
+    e1, e2, e3 = st.columns([2, 1.1, 1.1], vertical_alignment="bottom")
+    with e1:
         weight_in = st.number_input(
-            "Today's weight (kg)", min_value=30.0, max_value=300.0,
+            "Log today's weight (kg)", min_value=30.0, max_value=300.0,
             value=float(round(prefill, 1)), step=0.1, format="%.1f",
         )
-    with c2:
-        st.write("")
-        st.write("")
-        if st.button("💾 Save today's weight", use_container_width=True):
+    with e2:
+        if st.button("💾 Save weight", width="stretch", type="primary"):
             db.upsert_weight(today_iso, weight_in)
-            st.success(f"Saved {weight_in:.1f} kg for today.")
+            st.toast(f"Saved {weight_in:.1f} kg for today.", icon="✅")
             st.rerun()
-    with c3:
-        with st.expander("Edit / backfill a past date"):
-            past_date = st.date_input(
-                "Date", value=date.today(), max_value=date.today(),
-                key="backfill_date",
-            )
+    with e3:
+        with st.popover("✏️ Past date", width="stretch"):
+            past_date = st.date_input("Date", value=date.today(),
+                                      max_value=date.today(), key="backfill_date")
             past_weight = st.number_input(
                 "Weight (kg)", min_value=30.0, max_value=300.0,
                 value=float(round(prefill, 1)), step=0.1, format="%.1f",
                 key="backfill_weight",
             )
-            if st.button("Save weight for date"):
+            if st.button("Save", key="save_past"):
                 db.upsert_weight(past_date.isoformat(), past_weight)
-                st.success(f"Saved {past_weight:.1f} kg for {past_date.isoformat()}.")
+                st.toast(f"Saved {past_weight:.1f} kg for {past_date.isoformat()}.", icon="✅")
                 st.rerun()
+    if last_weight is not None:
+        st.caption(f"Last logged: {last_weight:.1f} kg")
 
 if df.empty:
-    st.info("No data yet. Save a weight above and sync Garmin from the sidebar.")
+    ui.section("Getting started")
+    ui.empty_state("📭", "No data yet — log a weight above, and Garmin metrics "
+                        "will appear once a sync runs.")
     st.stop()
 
 
-# --- Headline panel ------------------------------------------------------
+# --- Headline KPIs -------------------------------------------------------
 
 head = metrics.headline(df, window_days=14)
 status = metrics.status_read(df, head)
 
-st.subheader("This week at a glance")
-m1, m2, m3, m4 = st.columns(4)
+ui.section("This week at a glance")
+k1, k2, k3, k4 = st.columns(4)
 
-m1.metric(
-    "7-day avg weight",
-    f"{head.avg_weight:.1f} kg" if head.avg_weight is not None else "—",
-)
+with k1:
+    if head.avg_weight is not None:
+        ui.kpi("7-day avg weight", f"{head.avg_weight:.1f}", unit="kg")
+    else:
+        ui.kpi("7-day avg weight", "—", empty=True, sub="log weight to populate")
 
-if head.rate_kg_per_week is not None:
-    m2.metric(
-        "Weekly rate",
-        f"{head.rate_kg_per_week:+.2f} kg/wk",
-        help="From the 7-day moving-average slope. Negative = losing.",
-    )
-else:
-    m2.metric("Weekly rate", "—")
+with k2:
+    if head.rate_kg_per_week is not None:
+        rate = head.rate_kg_per_week
+        col = ui.ACCENT if rate < 0 else (ui.RED if rate > 0 else ui.MUTED)
+        arrow = "▼" if rate < 0 else ("▲" if rate > 0 else "→")
+        ui.kpi("Weekly rate",
+               f'<span style="color:{col}">{arrow} {abs(rate):.2f}</span>',
+               unit="kg/wk",
+               sub=("losing" if rate < 0 else "gaining" if rate > 0 else "flat"),
+               sub_color=col)
+    else:
+        ui.kpi("Weekly rate", "—", empty=True, sub="needs a few weigh-ins")
 
-m3.metric(
-    "Maintenance ESTIMATE",
-    f"{head.avg_expenditure:,.0f} kcal" if head.avg_expenditure is not None
-    else f"~{REFERENCE_MAINTENANCE_KCAL:,} kcal",
-    help="Live estimate = avg daily Garmin expenditure over the window. "
-         "An estimate, not ground truth.",
-)
+with k3:
+    if head.avg_expenditure is not None:
+        ui.kpi("Maintenance est.", f"{head.avg_expenditure:,.0f}", unit="kcal",
+               sub="live, from Garmin", sub_color=ui.MUTED,
+               help="Average daily Garmin expenditure over the window. "
+                    "An estimate, not ground truth.")
+    else:
+        ui.kpi("Maintenance est.", "—", empty=True)
 
-m4.metric(
-    "Implied daily deficit",
-    f"{head.implied_deficit:,.0f} kcal" if head.implied_deficit is not None else "—",
-    help="Derived from the weight trend (≈7700 kcal per kg).",
-)
+with k4:
+    if head.implied_deficit is not None:
+        d = head.implied_deficit
+        label = "daily deficit" if d >= 0 else "daily surplus"
+        col = ui.ACCENT if d >= 0 else ui.RED
+        ui.kpi("Implied deficit", f"{abs(d):,.0f}", unit="kcal",
+               sub=f"{label} · from trend", sub_color=col,
+               help="Energy balance implied by the weight trend (≈7700 kcal/kg).")
+    else:
+        ui.kpi("Implied deficit", "—", empty=True, sub="needs a trend")
 
-# Status banner.
-status_style = {
-    "on_target": st.success,
-    "aggressive": st.warning,
-    "stalled": st.warning,
-    "slow": st.info,
-    "gaining": st.warning,
-    "unknown": st.info,
-}.get(status.key, st.info)
-status_style(f"**{status.label}** — {status.nudge}")
-
-
-# --- Weight chart --------------------------------------------------------
-
-st.subheader("Weight trend")
-
-wdf = filter_range(df, RANGES[selected_range])
-weight_long = wdf[["date", "weight_kg", "weight_ma7"]].copy()
-
-points = (
-    alt.Chart(weight_long.dropna(subset=["weight_kg"]))
-    .mark_circle(size=45, opacity=0.45, color="#7aa2ff")
-    .encode(
-        x=alt.X("date:T", title=None),
-        y=alt.Y("weight_kg:Q", title="kg", scale=alt.Scale(zero=False)),
-        tooltip=[alt.Tooltip("date:T"), alt.Tooltip("weight_kg:Q", format=".1f")],
-    )
-)
-line = (
-    alt.Chart(weight_long.dropna(subset=["weight_ma7"]))
-    .mark_line(strokeWidth=3, color="#ff7a7a")
-    .encode(
-        x="date:T",
-        y=alt.Y("weight_ma7:Q", scale=alt.Scale(zero=False)),
-        tooltip=[alt.Tooltip("date:T"), alt.Tooltip("weight_ma7:Q", format=".2f", title="7-day avg")],
-    )
-)
-st.altair_chart((points + line).properties(height=320), use_container_width=True)
-st.caption("Dots are daily weigh-ins (noise). The red line is the 7-day moving average (the real trend).")
+st.write("")
+ui.status_banner(status.key, status.label, status.nudge)
 
 
-# --- Recovery row --------------------------------------------------------
+# --- Charts: weight + recovery ------------------------------------------
 
-st.subheader("Recovery")
+wdf = filter_range(df, RANGES[range_label])
+
+ui.section("Weight trend")
+with st.container(border=True):
+    has_weight = wdf["weight_kg"].notna().any() if "weight_kg" in wdf else False
+    if has_weight:
+        st.altair_chart(ui.weight_chart(wdf), width="stretch")
+        st.caption("Faint dots are daily weigh-ins (noise). The green line is the "
+                   "7-day moving average — your real trend.")
+    else:
+        ui.empty_state("⚖️", "Log your weight for a few days to see the trend line.")
+
+
+# --- Recovery ------------------------------------------------------------
+
+ui.section("Recovery")
 
 rec = metrics.recovery_read(df, window_days=14)
 if rec.under_recovering:
-    st.warning(f"⚠️ {rec.note}")
+    ui.status_banner("aggressive", "Under-recovery signal", rec.note)
 else:
     st.caption(rec.note)
 
 
-def trend_chart(frame: pd.DataFrame, col: str, title: str, color: str, transform=None):
-    sub = frame[["date", col]].dropna()
-    if sub.empty:
-        st.caption(f"No {title.lower()} data.")
-        return
-    sub = sub.copy()
-    if transform:
-        sub[col] = transform(sub[col])
-    chart = (
-        alt.Chart(sub)
-        .mark_line(point=True, strokeWidth=2, color=color)
-        .encode(
-            x=alt.X("date:T", title=None),
-            y=alt.Y(f"{col}:Q", title=title, scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T"), alt.Tooltip(f"{col}:Q", format=".1f")],
-        )
-        .properties(height=200)
-    )
-    st.altair_chart(chart, use_container_width=True)
+def _latest(frame: pd.DataFrame, col: str, transform=None):
+    s = frame[col].dropna() if col in frame else pd.Series(dtype=float)
+    if s.empty:
+        return None
+    v = s.iloc[-1]
+    return transform(v) if transform else v
+
+
+def _arrow(slope, good_down=False):
+    if slope is None or abs(slope) < 1e-6:
+        return "→", ui.MUTED
+    up = slope > 0
+    good = (not up) if good_down else up
+    return ("▲" if up else "▼"), (ui.ACCENT if good else ui.RED)
 
 
 r1, r2, r3 = st.columns(3)
 with r1:
-    st.markdown("**Resting HR** (bpm)")
-    trend_chart(wdf, "resting_hr", "Resting HR", "#ff9f43")
+    with st.container(border=True):
+        val = _latest(wdf, "resting_hr")
+        arr, col = _arrow(rec.rhr_slope, good_down=True)
+        ui.recovery_header("Resting HR", f"{val:.0f}" if val is not None else "—",
+                           unit="bpm" if val is not None else "",
+                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
+        chart = ui.spark(wdf, "resting_hr", ui.AMBER, fmt=".0f")
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        else:
+            ui.empty_state("⌚", "Enable wrist HR on your watch to populate this.")
+
 with r2:
-    st.markdown("**Sleep** (hours)")
-    trend_chart(wdf, "sleep_seconds", "Sleep h", "#54a0ff",
-                transform=lambda s: s / 3600.0)
+    with st.container(border=True):
+        val = _latest(wdf, "sleep_seconds", transform=lambda v: v / 3600.0)
+        arr, col = _arrow(rec.sleep_slope, good_down=False)
+        ui.recovery_header("Sleep", f"{val:.1f}" if val is not None else "—",
+                           unit="h" if val is not None else "",
+                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
+        chart = ui.spark(wdf, "sleep_seconds", ui.INDIGO, fmt=".1f",
+                         transform=lambda s: s / 3600.0)
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        else:
+            ui.empty_state("😴", "No sleep data in range.")
+
 with r3:
-    st.markdown("**Body Battery** (daily high)")
-    trend_chart(wdf, "body_battery_high", "Body Battery", "#1dd1a1")
+    with st.container(border=True):
+        val = _latest(wdf, "body_battery_high")
+        arr, col = _arrow(rec.bb_slope, good_down=False)
+        ui.recovery_header("Body Battery", f"{val:.0f}" if val is not None else "—",
+                           unit="peak" if val is not None else "",
+                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
+        chart = ui.spark(wdf, "body_battery_high", ui.TEAL, fmt=".0f")
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        else:
+            ui.empty_state("🔋", "Enable Body Battery on your watch to populate this.")
 
 
 # --- Activity context ----------------------------------------------------
 
-with st.expander("Calories & steps"):
-    a1, a2 = st.columns(2)
-    with a1:
-        st.markdown("**Total calories burned**")
-        trend_chart(wdf, "total_calories", "kcal", "#feca57")
-    with a2:
-        st.markdown("**Steps**")
-        trend_chart(wdf, "steps", "steps", "#5f27cd")
+ui.section("Activity")
+a1, a2 = st.columns(2)
+with a1:
+    with st.container(border=True):
+        val = _latest(wdf, "total_calories")
+        ui.recovery_header("Calories burned", f"{val:,.0f}" if val is not None else "—",
+                           unit="kcal" if val is not None else "")
+        chart = ui.spark(wdf, "total_calories", ui.AMBER, fmt=",.0f")
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        else:
+            ui.empty_state("🔥", "No calorie data in range.")
+with a2:
+    with st.container(border=True):
+        val = _latest(wdf, "steps")
+        ui.recovery_header("Steps", f"{val:,.0f}" if val is not None else "—")
+        chart = ui.spark(wdf, "steps", ui.BLUE, fmt=",.0f")
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        else:
+            ui.empty_state("👟", "No step data in range.")
 
-st.caption(
-    "Data cached locally in SQLite. If Garmin is unreachable, the dashboard "
-    "keeps showing the last synced data."
-)
+st.caption("Data stored in your database. If Garmin is unreachable, the dashboard "
+           "keeps showing the last synced data.")

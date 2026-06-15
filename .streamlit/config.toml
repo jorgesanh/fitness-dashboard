@@ -1,0 +1,9 @@
+# Streamlit theme — refined dark palette tuned to match the custom CSS in ui.py.
+[theme]
+base = "dark"
+primaryColor = "#10b981"            # emerald accent (buttons, focus, slider)
+backgroundColor = "#0d1117"         # app background
+secondaryBackgroundColor = "#161b22" # cards, sidebar, inputs
+textColor = "#e6edf3"
+font = "sans-serif"
+baseRadius = "0.85rem"
