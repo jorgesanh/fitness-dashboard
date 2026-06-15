@@ -320,54 +320,48 @@ def _latest(frame: pd.DataFrame, col: str, transform=None):
     return transform(v) if transform else v
 
 
-def _arrow(slope, good_down=False):
-    if slope is None or abs(slope) < 1e-6:
-        return "→", ui.MUTED
+def _arrow(slope, good_down=False, deadband=0.0):
+    """Direction arrow only when the slope is meaningful. Emerald if the
+    direction is good for you, soft amber if not, muted when flat/unknown."""
+    if slope is None or abs(slope) <= deadband:
+        return None, ui.MUTED
     up = slope > 0
     good = (not up) if good_down else up
-    return ("▲" if up else "▼"), (ui.ACCENT if good else ui.RED)
+    return ("▲" if up else "▼"), (ui.ACCENT if good else ui.AMBER)
+
+
+def _recovery_card(label, col, color, unit, *, fmt="{:.0f}", slope=None,
+                   good_down=False, deadband=0.0, transform=None,
+                   spark_transform=None, spark_fmt=".0f"):
+    with st.container(border=True):
+        val = _latest(wdf, col, transform=transform)
+        arr, acol = _arrow(slope, good_down=good_down, deadband=deadband)
+        ui.recovery_header(
+            label, fmt.format(val) if val is not None else "—",
+            unit=unit if val is not None else "",
+            trend=f"{arr} 14d" if arr else None, trend_color=acol,
+        )
+        chart = ui.spark(wdf, col, color, fmt=spark_fmt, transform=spark_transform)
+        if chart is not None:
+            st.altair_chart(chart, width="stretch")
+        elif val is not None:
+            st.caption("Building baseline — a couple more days for a trend.")
+        else:
+            st.caption("No data in range yet.")
 
 
 r1, r2, r3 = st.columns(3)
 with r1:
-    with st.container(border=True):
-        val = _latest(wdf, "resting_hr")
-        arr, col = _arrow(rec.rhr_slope, good_down=True)
-        ui.recovery_header("Resting HR", f"{val:.0f}" if val is not None else "—",
-                           unit="bpm" if val is not None else "",
-                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
-        chart = ui.spark(wdf, "resting_hr", ui.AMBER, fmt=".0f")
-        if chart is not None:
-            st.altair_chart(chart, width="stretch")
-        else:
-            ui.empty_state("⌚", "Enable wrist HR on your watch to populate this.")
-
+    _recovery_card("Resting HR", "resting_hr", ui.AMBER, "bpm",
+                   slope=rec.rhr_slope, good_down=True, deadband=0.1)
 with r2:
-    with st.container(border=True):
-        val = _latest(wdf, "sleep_seconds", transform=lambda v: v / 3600.0)
-        arr, col = _arrow(rec.sleep_slope, good_down=False)
-        ui.recovery_header("Sleep", f"{val:.1f}" if val is not None else "—",
-                           unit="h" if val is not None else "",
-                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
-        chart = ui.spark(wdf, "sleep_seconds", ui.INDIGO, fmt=".1f",
-                         transform=lambda s: s / 3600.0)
-        if chart is not None:
-            st.altair_chart(chart, width="stretch")
-        else:
-            ui.empty_state("😴", "No sleep data in range.")
-
+    _recovery_card("Sleep", "sleep_seconds", ui.INDIGO, "h", fmt="{:.1f}",
+                   slope=rec.sleep_slope, good_down=False, deadband=0.1,
+                   transform=lambda v: v / 3600.0,
+                   spark_transform=lambda s: s / 3600.0, spark_fmt=".1f")
 with r3:
-    with st.container(border=True):
-        val = _latest(wdf, "body_battery_high")
-        arr, col = _arrow(rec.bb_slope, good_down=False)
-        ui.recovery_header("Body Battery", f"{val:.0f}" if val is not None else "—",
-                           unit="peak" if val is not None else "",
-                           trend=f"{arr} 14d" if val is not None else None, trend_color=col)
-        chart = ui.spark(wdf, "body_battery_high", ui.TEAL, fmt=".0f")
-        if chart is not None:
-            st.altair_chart(chart, width="stretch")
-        else:
-            ui.empty_state("🔋", "Enable Body Battery on your watch to populate this.")
+    _recovery_card("Body Battery", "body_battery_high", ui.TEAL, "peak",
+                   slope=rec.bb_slope, good_down=False, deadband=0.5)
 
 
 # --- Activity context ----------------------------------------------------

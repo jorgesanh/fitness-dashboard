@@ -308,7 +308,7 @@ def spark(df: pd.DataFrame, col: str, color: str, fmt: str = ".0f",
           transform=None, height: int = 120):
     """Compact trend chart for a recovery/activity metric."""
     sub = df[["date", col]].dropna().copy()
-    if sub.empty:
+    if len(sub) < 2:  # need at least two points to draw a trend line
         return None
     if transform:
         sub[col] = transform(sub[col])

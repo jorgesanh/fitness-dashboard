@@ -148,57 +148,80 @@ def _is_stalled(df: pd.DataFrame) -> bool:
     return span_days >= 12 and abs(change) < STALL_BAND_KG
 
 
+# Recovery thresholds. We judge on ABSOLUTE levels, not bare slopes — a
+# downward sleep slope from a 12h outlier to a healthy 8h is not a problem.
+MIN_TREND_POINTS = 5        # need this many days before trusting a slope
+SLEEP_LOW_H = 6.5           # avg below this is genuinely insufficient
+RHR_RISE_PER_DAY = 0.2      # bpm/day rise that counts as meaningful
+BB_FALL_PER_DAY = 0.8       # Body Battery points/day fall that counts
+
+
 @dataclass
 class Recovery:
-    rhr_slope: float | None        # bpm per day
+    rhr_slope: float | None        # bpm per day (None until enough data)
     sleep_slope: float | None      # hours per day
     bb_slope: float | None         # body battery points per day
+    avg_sleep_h: float | None      # recent average nightly sleep (hours)
     under_recovering: bool
     note: str
 
 
+def _trend_slope(window: pd.DataFrame, col: str, transform=None) -> float | None:
+    """Slope per day, but only once there are enough points to be meaningful."""
+    if col not in window:
+        return None
+    series = window[col]
+    if transform is not None:
+        series = transform(series)
+    if series.dropna().shape[0] < MIN_TREND_POINTS:
+        return None
+    return _slope_per_day(series)
+
+
 def recovery_read(df: pd.DataFrame, window_days: int = 14) -> Recovery:
-    """Trend resting HR, sleep, and Body Battery; flag under-recovery when RHR
-    trends up while sleep and Body Battery trend down."""
+    """Read recovery from resting HR, sleep, and Body Battery.
+
+    Under-recovery is flagged only when at least TWO signals are genuinely
+    adverse in absolute terms (RHR meaningfully rising, sleep actually low,
+    Body Battery meaningfully falling) — not when a single metric merely
+    trends down while still in a healthy range.
+    """
     window = df.tail(window_days)
 
-    rhr_slope = _slope_per_day(window["resting_hr"]) if "resting_hr" in window else None
+    rhr_slope = _trend_slope(window, "resting_hr")
+    sleep_slope = _trend_slope(window, "sleep_seconds", transform=lambda s: s / 3600.0)
+    bb_slope = _trend_slope(window, "body_battery_high")
 
-    sleep_slope = None
-    if "sleep_seconds" in window:
-        sleep_hours = window["sleep_seconds"] / 3600.0
-        sleep_slope = _slope_per_day(sleep_hours)
+    sleep_h = (window["sleep_seconds"].dropna() / 3600.0) if "sleep_seconds" in window else pd.Series(dtype=float)
+    avg_sleep = float(sleep_h.tail(7).mean()) if not sleep_h.empty else None
 
-    bb_slope = _slope_per_day(window["body_battery_high"]) if "body_battery_high" in window else None
-
-    have_rhr = rhr_slope is not None
-    have_bb = bb_slope is not None
-    have_sleep = sleep_slope is not None
-
-    # Full signal: RHR rising while sleep AND Body Battery fall.
-    under = (
-        have_rhr and rhr_slope > 0
-        and have_sleep and sleep_slope < 0
-        and have_bb and bb_slope < 0
+    have_any = any(
+        (window[c].notna().any() if c in window else False)
+        for c in ("resting_hr", "sleep_seconds", "body_battery_high")
     )
 
+    # Adverse signals, each requiring a genuinely concerning absolute state.
+    signals = []
+    if rhr_slope is not None and rhr_slope > RHR_RISE_PER_DAY:
+        signals.append("resting HR trending up")
+    if avg_sleep is not None and avg_sleep < SLEEP_LOW_H:
+        signals.append(f"sleep averaging {avg_sleep:.1f}h")
+    if bb_slope is not None and bb_slope < -BB_FALL_PER_DAY:
+        signals.append("Body Battery trending down")
+
+    under = len(signals) >= 2
+
     if under:
-        note = ("Resting HR is rising while sleep and Body Battery fall — a "
-                "classic under-recovery signal. Ease the deficit or training "
-                "load for a few days.")
-    elif not have_rhr and not have_bb and not have_sleep:
+        note = ("Watch recovery — " + ", ".join(signals) +
+                ". Consider easing the deficit or training load for a few days.")
+    elif avg_sleep is not None and avg_sleep < SLEEP_LOW_H:
+        note = (f"Sleep is on the low side ({avg_sleep:.1f}h avg). Prioritise it "
+                "to protect recovery while cutting.")
+    elif avg_sleep is not None:
+        note = f"Recovery looks solid — averaging {avg_sleep:.1f}h sleep."
+    elif not have_any:
         note = "No recovery data yet — sync Garmin to populate this."
-    elif not have_rhr and not have_bb:
-        # Device isn't reporting heart rate / Body Battery — sleep-only read.
-        if have_sleep and sleep_slope < -0.05:  # losing >~3 min/night over window
-            under = True
-            note = ("Sleep is trending down. Your device isn't reporting heart "
-                    "rate or Body Battery, so protect sleep and watch training "
-                    "load as your under-recovery early-warning.")
-        else:
-            note = ("Sleep looks steady. Note: this device isn't reporting "
-                    "heart rate or Body Battery, so recovery is sleep-only.")
     else:
         note = "Recovery markers look stable."
 
-    return Recovery(rhr_slope, sleep_slope, bb_slope, under, note)
+    return Recovery(rhr_slope, sleep_slope, bb_slope, avg_sleep, under, note)
