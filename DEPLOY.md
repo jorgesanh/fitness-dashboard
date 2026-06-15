@@ -1,89 +1,106 @@
-# Getting it online
+# Deploying online (Supabase + Streamlit Cloud)
 
-You asked to not have to start this from the console and to have it "online."
-There are two honest paths, with a real trade-off between **reliability** and a
-**public URL**. Read this before picking one.
+This app is wired for a **public URL** with your data living in **Supabase
+Postgres** so nothing is lost between deploys. The architecture works around the
+one hard constraint — **Garmin blocks logins from datacenter IPs** — by splitting
+the work:
 
-## The two constraints that shape everything
+```
+        ┌─────────────────────────┐         ┌──────────────────────┐
+        │  Streamlit Community     │  reads/ │   Supabase Postgres  │
+        │  Cloud (public URL)      │◀──────▶│   (your data)         │
+        │  • weight entry          │  writes │   garmin_daily        │
+        │  • dashboard / charts    │         │   weight              │
+        └─────────────────────────┘         └──────────▲───────────┘
+                                                        │ writes
+                                            ┌───────────┴───────────┐
+                                            │  sync_job.py on your   │
+                                            │  home PC (residential  │
+                                            │  IP → Garmin works)    │
+                                            └────────────────────────┘
+```
 
-1. **Garmin rate-limits / blocks datacenter IPs.** Logging in from your home
-   (residential) IP works. Logging in from a cloud host (Streamlit Cloud, a VPS,
-   etc.) frequently returns HTTP 429 or gets bot-challenged. We already saw 429s
-   even from your home IP during testing — from a datacenter it's worse.
-2. **Your data lives in local files** (`fitness.db` and the cached token in
-   `~/.garminconnect`). Most free cloud hosts have an **ephemeral** filesystem
-   that resets on every redeploy/sleep — which would wipe your weight history,
-   the whole point of the app.
+- The **cloud app** does everything that doesn't need Garmin: logging weight and
+  showing trends/recovery. It reads and writes Supabase.
+- A tiny **local job** (`sync_job.py`) pulls Garmin on your home PC and writes the
+  same Supabase DB. Scheduled a few times a day, your cloud dashboard always has
+  fresh Garmin data.
 
-So "always-on public cloud URL" fights the design. Here's how to get what you
-actually want.
-
----
-
-## Option A — Run locally, always-on (recommended)
-
-Reliable Garmin sync, data persists, reachable from your phone. This is the
-right default for a personal health app.
-
-**1. Launch without the console:** double-click **`start.bat`**. It activates the
-venv and serves on your network. Open `http://<your-PC-ip>:8501` on your phone
-(same Wi-Fi). Your PC's network IP during setup was `192.168.1.36`, so
-`http://192.168.1.36:8501`.
-
-**2. Auto-start on login (so you never start it manually):** Windows Task
-Scheduler →
-- Create Task → *Trigger:* "At log on" →
-- *Action:* Start a program → `C:\Users\josah\fitness-dashboard\start.bat` →
-- (optional) check "Run whether user is logged on or not."
-
-Now it's running whenever your PC is on; just open the URL on your phone.
-
-**3. Reach it from anywhere (not just home Wi-Fi):** install
-[Tailscale](https://tailscale.com) on your PC and phone (free personal tier).
-You get a private IP that works from any network — `http://<tailscale-ip>:8501` —
-with no port-forwarding and without exposing the app to the public internet.
+The Supabase project, schema, and your 90-day history are **already set up** —
+your `DATABASE_URL` is in your local `.env` and saved in
+`.supabase_database_url.txt` (both git-ignored).
 
 ---
 
-## Option B — Streamlit Community Cloud (public URL)
+## Step 1 — Deploy the app to Streamlit Community Cloud (~2 min, your click)
 
-A genuine `https://...streamlit.app` URL, deployed straight from the GitHub repo.
-Free. **But** mind the two constraints above:
+Streamlit Cloud has no API for creating a deployment — it needs a GitHub OAuth
+click in your browser. This is the only manual step.
 
-- **Garmin login may fail from Streamlit's IP** (429 / bot challenge). If it does,
-  there's no fix from your side except retrying — it's Garmin's anti-automation.
-- **The filesystem is ephemeral.** `fitness.db` and the token cache reset on each
-  redeploy and after the app sleeps. Without a persistent database, **you lose
-  your weight history and re-do MFA constantly.** This makes plain Streamlit Cloud
-  a poor fit as-is.
-
-To make Option B viable you'd swap the local SQLite for a hosted Postgres. You
-already use **Supabase** (there's a `.supabase` dir in your home folder), so that's
-the natural choice — a small change to `db.py` to talk to Supabase Postgres
-instead of SQLite, plus storing the Garmin token in the DB.
-
-**If you want Option B, tell me and I'll wire up Supabase persistence.** I didn't
-do it pre-emptively because it's a real change beyond the original local-app scope.
-
-### If you still want to deploy as-is (accepting the caveats)
-
-1. Push to GitHub (already done — see README).
-2. Go to https://share.streamlit.io → "New app" → pick this repo → `app.py`.
-3. In *Advanced settings → Secrets*, add:
+1. Go to **https://share.streamlit.io** and sign in with the **same GitHub
+   account that owns the repo** (`jorgesanh`).
+2. **Create app → Deploy a public app from GitHub.**
+3. Pick:
+   - **Repository:** `jorgesanh/fitness-dashboard`
+   - **Branch:** `master`
+   - **Main file path:** `app.py`
+4. Click **Advanced settings → Secrets** and paste (the real value is in your
+   local `.supabase_database_url.txt`):
    ```toml
-   GARMIN_EMAIL = "you@example.com"
-   GARMIN_PASSWORD = "your-garmin-password"
+   DATABASE_URL = "postgresql://postgres.pbukfofybkxfnbtsbbox:<db-password>@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
    ```
-   (The app reads these via `os.getenv`, so Streamlit secrets work directly.)
-4. Deploy. Expect possible Garmin 429s and data resets per the caveats above.
+5. **Deploy.** Your public URL will be something like
+   `https://fitness-dashboard-<random>.streamlit.app` (you can rename it in app
+   settings). Open it on any device — weight logging and the dashboard work
+   immediately against Supabase.
+
+> The repo is **private**. Streamlit Cloud's free tier can still deploy it because
+> you authorize it via GitHub OAuth. If it ever can't see the repo, grant Streamlit
+> access to private repos in the GitHub authorization prompt.
 
 ---
 
-## My recommendation
+## Step 2 — Keep Garmin data fresh from your home PC
 
-**Option A** (local always-on + Tailscale) for a personal tracker: Garmin sync is
-reliable from your home IP, your weight history is safe, and Tailscale gives you
-phone access from anywhere without making your health data public.
+The cloud app can't log into Garmin. Run the sync job locally instead.
 
-Reach for **Option B + Supabase** only if you specifically want a public URL and
-are OK with me migrating the storage layer — say the word and I'll do it.
+**One-off:**
+```powershell
+cd C:\Users\josah\fitness-dashboard
+.venv\Scripts\python.exe sync_job.py            # incremental
+.venv\Scripts\python.exe sync_job.py --backfill # force 90-day refill
+```
+
+**Scheduled (set-and-forget) — Windows Task Scheduler:**
+1. Create Task → **Trigger:** Daily, repeat every 6 hours.
+2. **Action:** Start a program
+   - Program: `C:\Users\josah\fitness-dashboard\.venv\Scripts\python.exe`
+   - Arguments: `sync_job.py`
+   - Start in: `C:\Users\josah\fitness-dashboard`
+3. It reads `DATABASE_URL` + Garmin creds from `.env` and writes to Supabase.
+
+The first Garmin login (and any MFA) is handled once when you run the app or the
+job locally; the cached token in `~/.garminconnect` is reused after that.
+
+---
+
+## Notes & caveats (honest)
+
+- **Garmin from the cloud:** the in-app "Sync Garmin now" button will usually fail
+  on Streamlit Cloud with a rate-limit message — that's expected; it's why
+  `sync_job.py` exists. The app catches it and keeps showing Supabase data.
+- **Why the pooler URL:** Supabase's direct host (`db.<ref>.supabase.co`) is
+  IPv6-only; Streamlit Cloud needs IPv4, so we use the session pooler
+  (`...pooler.supabase.com:5432`).
+- **One database everywhere:** your local app, the sync job, and the cloud app all
+  point at the same Supabase via `DATABASE_URL`, so there's a single source of
+  truth. Remove `DATABASE_URL` from `.env` if you ever want the local app to fall
+  back to the standalone SQLite file.
+- **Rotating the DB password:** Supabase dashboard → Project Settings → Database →
+  Reset password, then update `DATABASE_URL` in `.env` and in Streamlit secrets.
+
+## Alternative: keep it fully local
+
+If you'd rather not use the cloud at all, see **Option A** in the project history:
+run `start.bat`, auto-start via Task Scheduler, and use Tailscale for phone access.
+Remove `DATABASE_URL` from `.env` to use the local SQLite database.

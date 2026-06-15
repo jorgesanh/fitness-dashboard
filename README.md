@@ -14,8 +14,10 @@ recovery state obvious at a glance.
 - Two-second weight logging, plus past-date backfill
 - Manual "Sync Garmin now" button; shows cached data if Garmin is unreachable
 
-Everything is stored locally in `fitness.db` (SQLite). Nothing leaves your machine
-except the calls to Garmin Connect.
+Storage is **SQLite by default** (`fitness.db`), or **Supabase Postgres** when a
+`DATABASE_URL` is set — which is what lets the app run online with persistent data.
+See [DEPLOY.md](DEPLOY.md) for the public-URL setup (Streamlit Cloud + Supabase +
+a local Garmin sync job).
 
 ## Setup
 
@@ -92,7 +94,8 @@ Then open `http://<your-computer-ip>:8501` from your phone on the same Wi-Fi.
 |------|---------|
 | `app.py` | Streamlit UI |
 | `garmin_sync.py` | Garmin login (native SSO + MFA), per-day metric pull, sync |
-| `db.py` | SQLite storage (`garmin_daily`, `weight`) |
+| `sync_job.py` | Headless Garmin→DB sync for scheduling (used for the cloud setup) |
+| `db.py` | Storage layer — SQLite locally, Postgres when `DATABASE_URL` is set |
 | `metrics.py` | Moving average, rate, status read, recovery flags |
 | `config.py` | Paths, targets, constants |
 

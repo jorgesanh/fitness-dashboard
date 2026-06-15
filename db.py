@@ -1,4 +1,4 @@
-"""SQLite storage layer.
+"""SQLite / Postgres storage layer.
 
 Two tables:
   - garmin_daily : one row per calendar date of Garmin-sourced metrics
@@ -6,32 +6,76 @@ Two tables:
 
 Both are keyed by an ISO date string ("YYYY-MM-DD"). Writes are upserts so
 re-syncing a day or re-entering a weight just overwrites the existing row.
+
+Backend is chosen at runtime:
+  - If DATABASE_URL is set (e.g. a Supabase Postgres pooler URL) -> Postgres.
+  - Otherwise -> a local SQLite file (config.DB_PATH).
+
+The SQL is identical across both engines (TEXT/INTEGER/REAL and
+`ON CONFLICT(...) DO UPDATE` are supported by each); only the connection and the
+parameter placeholder differ.
 """
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime
 
 import pandas as pd
+from dotenv import load_dotenv
 
 from config import DB_PATH
+
+# Load .env before reading DATABASE_URL so the backend choice is correct
+# regardless of import order. (On Streamlit Cloud there is no .env; app.py
+# bridges st.secrets into the environment before importing this module.)
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+IS_POSTGRES = bool(DATABASE_URL)
+
+
+def _q(sql: str) -> str:
+    """Translate '?' placeholders to '%s' for Postgres; leave as-is for SQLite."""
+    return sql.replace("?", "%s") if IS_POSTGRES else sql
 
 
 @contextmanager
 def _connect():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    if IS_POSTGRES:
+        import psycopg
+
+        conn = psycopg.connect(DATABASE_URL, autocommit=False)
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _query_df(sql: str) -> pd.DataFrame:
+    """Run a SELECT and return a DataFrame, backend-agnostic."""
+    with _connect() as conn:
+        cur = conn.cursor()
+        cur.execute(sql)
+        cols = [d[0] for d in cur.description]
+        rows = cur.fetchall()
+    return pd.DataFrame(rows, columns=cols)
 
 
 def init_db():
     """Create tables if they don't exist. Safe to call on every launch."""
     with _connect() as conn:
-        conn.execute(
+        cur = conn.cursor()
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS garmin_daily (
                 date              TEXT PRIMARY KEY,
@@ -50,7 +94,7 @@ def init_db():
             )
             """
         )
-        conn.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS weight (
                 date       TEXT PRIMARY KEY,
@@ -86,53 +130,53 @@ def upsert_garmin_day(day: str, metrics: dict):
     cols = ", ".join(GARMIN_COLUMNS)
     placeholders = ", ".join(["?"] * len(GARMIN_COLUMNS))
     values = [metrics.get(c) for c in GARMIN_COLUMNS]
+    sql = f"""
+        INSERT INTO garmin_daily (date, {cols}, updated_at)
+        VALUES (?, {placeholders}, ?)
+        ON CONFLICT(date) DO UPDATE SET
+            {", ".join(f"{c}=excluded.{c}" for c in GARMIN_COLUMNS)},
+            updated_at=excluded.updated_at
+    """
     with _connect() as conn:
-        conn.execute(
-            f"""
-            INSERT INTO garmin_daily (date, {cols}, updated_at)
-            VALUES (?, {placeholders}, ?)
-            ON CONFLICT(date) DO UPDATE SET
-                {", ".join(f"{c}=excluded.{c}" for c in GARMIN_COLUMNS)},
-                updated_at=excluded.updated_at
-            """,
-            [day, *values, datetime.now().isoformat(timespec="seconds")],
+        conn.cursor().execute(
+            _q(sql), [day, *values, datetime.now().isoformat(timespec="seconds")]
         )
 
 
 def get_existing_garmin_dates() -> set:
-    with _connect() as conn:
-        rows = conn.execute("SELECT date FROM garmin_daily").fetchall()
-    return {r["date"] for r in rows}
+    df = _query_df("SELECT date FROM garmin_daily")
+    return set(df["date"].tolist()) if not df.empty else set()
 
 
 def latest_garmin_date() -> str | None:
-    with _connect() as conn:
-        row = conn.execute("SELECT MAX(date) AS d FROM garmin_daily").fetchone()
-    return row["d"] if row and row["d"] else None
+    df = _query_df("SELECT MAX(date) AS d FROM garmin_daily")
+    if df.empty or pd.isna(df["d"].iloc[0]):
+        return None
+    return str(df["d"].iloc[0])
 
 
 # --- Weight --------------------------------------------------------------
 
 def upsert_weight(day: str, weight_kg: float):
+    sql = """
+        INSERT INTO weight (date, weight_kg, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET
+            weight_kg=excluded.weight_kg,
+            updated_at=excluded.updated_at
+    """
     with _connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO weight (date, weight_kg, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(date) DO UPDATE SET
-                weight_kg=excluded.weight_kg,
-                updated_at=excluded.updated_at
-            """,
+        conn.cursor().execute(
+            _q(sql),
             [day, float(weight_kg), datetime.now().isoformat(timespec="seconds")],
         )
 
 
 def latest_weight() -> float | None:
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT weight_kg FROM weight ORDER BY date DESC LIMIT 1"
-        ).fetchone()
-    return row["weight_kg"] if row else None
+    df = _query_df("SELECT weight_kg FROM weight ORDER BY date DESC LIMIT 1")
+    if df.empty:
+        return None
+    return float(df["weight_kg"].iloc[0])
 
 
 # --- Combined read for the dashboard ------------------------------------
@@ -143,9 +187,8 @@ def load_dataframe() -> pd.DataFrame:
     The date axis spans from the earliest record (in either table) to today,
     with no gaps, so charts and moving averages handle missing days cleanly.
     """
-    with _connect() as conn:
-        garmin = pd.read_sql_query("SELECT * FROM garmin_daily", conn)
-        weight = pd.read_sql_query("SELECT date, weight_kg FROM weight", conn)
+    garmin = _query_df("SELECT * FROM garmin_daily")
+    weight = _query_df("SELECT date, weight_kg FROM weight")
 
     if garmin.empty and weight.empty:
         return pd.DataFrame()

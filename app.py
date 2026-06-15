@@ -5,11 +5,23 @@ Run with:  streamlit run app.py
 
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 
 import altair as alt
 import pandas as pd
 import streamlit as st
+
+# Bridge Streamlit Cloud secrets -> environment BEFORE importing db/garmin_sync,
+# which read DATABASE_URL / GARMIN_* from os.environ at import time. Locally this
+# is a no-op (values come from .env); on Streamlit Cloud the secrets you paste in
+# the dashboard land here.
+try:
+    for _k in ("DATABASE_URL", "GARMIN_EMAIL", "GARMIN_PASSWORD"):
+        if _k not in os.environ and _k in st.secrets:
+            os.environ[_k] = str(st.secrets[_k])
+except Exception:
+    pass
 
 import db
 import garmin_sync

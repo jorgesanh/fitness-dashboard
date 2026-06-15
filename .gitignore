@@ -15,3 +15,9 @@ __pycache__/
 .venv/
 venv/
 .streamlit/secrets.toml
+.supabase_database_url.txt
+.supabase_db_password.txt
+secrets.local.toml
+
+# Supabase CLI local state
+supabase/
