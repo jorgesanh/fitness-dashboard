@@ -138,9 +138,13 @@ latest_garmin = db.latest_garmin_date()
 synced_txt = f"Garmin synced through {latest_garmin}" if latest_garmin else "No Garmin data yet"
 
 
-# --- Header + range selector --------------------------------------------
+# --- Header: title · range · compact weight logger ----------------------
 
-hcol1, hcol2 = st.columns([3, 1.15], vertical_alignment="bottom")
+today_iso = date.today().isoformat()
+last_weight = db.latest_weight()
+prefill = last_weight if last_weight is not None else 87.0
+
+hcol1, hcol2, hcol3 = st.columns([2.4, 1.7, 1], vertical_alignment="bottom")
 with hcol1:
     ui.header("Fat-loss & Recovery",
               "Weekly trend and recovery at a glance · cutting on ~2,850 kcal maintenance")
@@ -149,47 +153,39 @@ with hcol2:
         "Range", list(RANGES.keys()), default="4 weeks",
         selection_mode="single", label_visibility="collapsed",
     ) or "4 weeks"
-st.caption(synced_txt)
-
-
-# --- Weight entry (frictionless) ----------------------------------------
-
-today_iso = date.today().isoformat()
-last_weight = db.latest_weight()
-prefill = last_weight if last_weight is not None else 87.0
-
-with st.container(border=True):
-    e1, e2, e3 = st.columns([2, 1.1, 1.1], vertical_alignment="bottom")
-    with e1:
+with hcol3:
+    with st.popover("⚖️ Log weight", width="stretch"):
         weight_in = st.number_input(
-            "Log today's weight (kg)", min_value=30.0, max_value=300.0,
+            "Today's weight (kg)", min_value=30.0, max_value=300.0,
             value=float(round(prefill, 1)), step=0.1, format="%.1f",
         )
-    with e2:
-        if st.button("💾 Save weight", width="stretch", type="primary"):
+        if st.button("💾 Save today", width="stretch", type="primary"):
             db.upsert_weight(today_iso, weight_in)
             st.toast(f"Saved {weight_in:.1f} kg for today.", icon="✅")
             st.rerun()
-    with e3:
-        with st.popover("✏️ Past date", width="stretch"):
-            past_date = st.date_input("Date", value=date.today(),
-                                      max_value=date.today(), key="backfill_date")
-            past_weight = st.number_input(
-                "Weight (kg)", min_value=30.0, max_value=300.0,
-                value=float(round(prefill, 1)), step=0.1, format="%.1f",
-                key="backfill_weight",
-            )
-            if st.button("Save", key="save_past"):
-                db.upsert_weight(past_date.isoformat(), past_weight)
-                st.toast(f"Saved {past_weight:.1f} kg for {past_date.isoformat()}.", icon="✅")
-                st.rerun()
-    if last_weight is not None:
-        st.caption(f"Last logged: {last_weight:.1f} kg")
+        st.divider()
+        st.caption("Backfill a past date")
+        past_date = st.date_input("Date", value=date.today(),
+                                  max_value=date.today(), key="backfill_date",
+                                  label_visibility="collapsed")
+        past_weight = st.number_input(
+            "Weight (kg)", min_value=30.0, max_value=300.0,
+            value=float(round(prefill, 1)), step=0.1, format="%.1f",
+            key="backfill_weight", label_visibility="collapsed",
+        )
+        if st.button("Save past date", width="stretch", key="save_past"):
+            db.upsert_weight(past_date.isoformat(), past_weight)
+            st.toast(f"Saved {past_weight:.1f} kg for {past_date.isoformat()}.", icon="✅")
+            st.rerun()
+        if last_weight is not None:
+            st.caption(f"Last logged: {last_weight:.1f} kg")
+
+st.caption(synced_txt)
 
 if df.empty:
     ui.section("Getting started")
-    ui.empty_state("📭", "No data yet — log a weight above, and Garmin metrics "
-                        "will appear once a sync runs.")
+    ui.empty_state("📭", "No data yet — use **Log weight** above, and Garmin "
+                        "metrics will appear once a sync runs.")
     st.stop()
 
 
@@ -243,20 +239,7 @@ with k4:
 st.write("")
 ui.status_banner(status.key, status.label, status.nudge)
 
-
-# --- Charts: weight + recovery ------------------------------------------
-
 wdf = filter_range(df, RANGES[range_label])
-
-ui.section("Weight trend")
-with st.container(border=True):
-    has_weight = wdf["weight_kg"].notna().any() if "weight_kg" in wdf else False
-    if has_weight:
-        st.altair_chart(ui.weight_chart(wdf), width="stretch")
-        st.caption("Faint dots are daily weigh-ins (noise). The green line is the "
-                   "7-day moving average — your real trend.")
-    else:
-        ui.empty_state("⚖️", "Log your weight for a few days to see the trend line.")
 
 
 # --- Recovery ------------------------------------------------------------
@@ -351,6 +334,20 @@ with a2:
             st.altair_chart(chart, width="stretch")
         else:
             ui.empty_state("👟", "No step data in range.")
+
+
+# --- Weight trend (full detail, at the bottom) --------------------------
+
+ui.section("Weight trend")
+with st.container(border=True):
+    has_weight = wdf["weight_kg"].notna().any() if "weight_kg" in wdf else False
+    if has_weight:
+        st.altair_chart(ui.weight_chart(wdf), width="stretch")
+        st.caption("Faint dots are daily weigh-ins (noise). The green line is the "
+                   "7-day moving average — your real trend.")
+    else:
+        ui.empty_state("⚖️", "Use **Log weight** in the header to record a few days "
+                            "and the trend line will appear here.")
 
 st.caption("Data stored in your database. If Garmin is unreachable, the dashboard "
            "keeps showing the last synced data.")
