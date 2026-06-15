@@ -30,7 +30,33 @@ from config import TRAINING_TYPES, WEEKLY_SESSION_TARGET
 
 st.set_page_config(page_title="Health Dashboard", page_icon="🩺", layout="wide")
 ui.inject_css()
-db.init_db()
+
+# Create tables once per session, not on every rerun (avoids needless DB calls).
+if "db_inited" not in st.session_state:
+    db.init_db()
+    st.session_state["db_inited"] = True
+
+
+# --- Cached data reads ---------------------------------------------------
+# Streamlit reruns the whole script on every interaction; without caching that
+# means re-querying Supabase each time (the lag you saw). Cache the reads and
+# clear the cache only after a write (see _refresh).
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_data():
+    return metrics.add_weight_trend(db.load_dataframe())
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_workouts():
+    return db.get_workouts()
+
+
+def _refresh():
+    """Invalidate cached reads after a write, then rerun."""
+    load_data.clear()
+    load_workouts.clear()
+    st.rerun()
 
 
 # --- Range selector ------------------------------------------------------
@@ -76,6 +102,8 @@ def _do_sync(client, full_backfill: bool):
         )
         bar.empty()
         st.session_state["sync_error"] = None
+        load_data.clear()
+        load_workouts.clear()
         st.toast(f"Synced {n} day(s) from Garmin.", icon="✅")
     except Exception as exc:
         bar.empty()
@@ -130,21 +158,36 @@ with st.sidebar:
         st.caption(f"⚠️ Last sync issue: {st.session_state['sync_error']}")
 
 
-# --- Data ----------------------------------------------------------------
+# --- Data (cached) -------------------------------------------------------
 
-df = db.load_dataframe()
-df = metrics.add_weight_trend(df)
-workouts_all = db.get_workouts()
+df = load_data()
+workouts_all = load_workouts()
 
-latest_garmin = db.latest_garmin_date()
+
+def _col_latest(frame, col):
+    s = frame[col].dropna() if (not frame.empty and col in frame) else pd.Series(dtype=float)
+    return s.iloc[-1] if not s.empty else None
+
+
+# Most recent weight / Garmin date, derived from the cached frame (no extra queries).
+last_weight = _col_latest(df, "weight_kg")
+last_weight = float(last_weight) if last_weight is not None else None
+prefill = last_weight if last_weight is not None else 87.0
+
+latest_garmin = None
+if not df.empty:
+    gcols = [c for c in ["total_calories", "steps", "sleep_seconds"] if c in df]
+    if gcols:
+        gmask = df[gcols].notna().any(axis=1)
+        if gmask.any():
+            latest_garmin = df.loc[gmask, "date"].iloc[-1].date().isoformat()
 synced_txt = f"Garmin synced through {latest_garmin}" if latest_garmin else "No Garmin data yet"
+
+today_iso = date.today().isoformat()
+today_ts = pd.Timestamp(date.today())
 
 
 # --- Header: title · range · compact weight logger ----------------------
-
-today_iso = date.today().isoformat()
-last_weight = db.latest_weight()
-prefill = last_weight if last_weight is not None else 87.0
 
 hcol1, hcol2, hcol3 = st.columns([2.6, 1.5, 1], vertical_alignment="bottom")
 with hcol1:
@@ -157,28 +200,16 @@ with hcol2:
     ) or "4w"
 with hcol3:
     with st.popover("⚖️ Log weight", width="stretch"):
+        w_log_date = st.date_input("Date", value=date.today(), max_value=date.today(),
+                                   key="w_date")
         weight_in = st.number_input(
-            "Today's weight (kg)", min_value=30.0, max_value=300.0,
-            value=float(round(prefill, 1)), step=0.1, format="%.1f",
-        )
-        if st.button("💾 Save today", width="stretch", type="primary"):
-            db.upsert_weight(today_iso, weight_in)
-            st.toast(f"Saved {weight_in:.1f} kg for today.", icon="✅")
-            st.rerun()
-        st.divider()
-        st.caption("Backfill a past date")
-        past_date = st.date_input("Date", value=date.today(),
-                                  max_value=date.today(), key="backfill_date",
-                                  label_visibility="collapsed")
-        past_weight = st.number_input(
             "Weight (kg)", min_value=30.0, max_value=300.0,
-            value=float(round(prefill, 1)), step=0.1, format="%.1f",
-            key="backfill_weight", label_visibility="collapsed",
+            value=float(round(prefill, 1)), step=0.1, format="%.1f", key="w_val",
         )
-        if st.button("Save past date", width="stretch", key="save_past"):
-            db.upsert_weight(past_date.isoformat(), past_weight)
-            st.toast(f"Saved {past_weight:.1f} kg for {past_date.isoformat()}.", icon="✅")
-            st.rerun()
+        if st.button("💾 Save", width="stretch", type="primary"):
+            db.upsert_weight(w_log_date.isoformat(), weight_in)
+            st.toast(f"Saved {weight_in:.1f} kg for {w_log_date.isoformat()}.", icon="✅")
+            _refresh()
         if last_weight is not None:
             st.caption(f"Last logged: {last_weight:.1f} kg")
 
@@ -189,6 +220,50 @@ if df.empty:
     ui.empty_state("📭", "No data yet — use **Log weight** above, and Garmin "
                         "metrics will appear once a sync runs.")
     st.stop()
+
+
+# --- Today strip ---------------------------------------------------------
+
+today_row = df[df["date"] == today_ts]
+tr = today_row.iloc[0] if not today_row.empty else None
+
+
+def _today_val(col, transform=None):
+    if tr is None or col not in today_row or pd.isna(tr[col]):
+        return None
+    v = tr[col]
+    return transform(v) if transform else v
+
+
+todays_sessions = []
+if not workouts_all.empty:
+    todays_sessions = sorted(workouts_all[workouts_all["date"] == today_ts]["type"].tolist())
+_labels = {t["key"]: t["label"] for t in TRAINING_TYPES}
+sessions_str = " · ".join(_labels.get(k, k) for k in todays_sessions) if todays_sessions else None
+
+_steps = _today_val("steps")
+_cals = _today_val("total_calories")
+_sleep = _today_val("sleep_seconds", transform=lambda v: v / 3600.0)
+_bb = _today_val("body_battery_high")
+_rhr = _today_val("resting_hr")
+_w_today = _today_val("weight_kg")
+
+with st.container(border=True):
+    _t = date.today()
+    ui.today_card(
+        f"{_t:%a · %b} {_t.day}",
+        [
+            ("Weight", f"{_w_today:.1f}" if _w_today is not None else
+                       (f"{last_weight:.1f}" if last_weight is not None else None),
+             "kg"),
+            ("Sleep", f"{_sleep:.1f}" if _sleep is not None else None, "h"),
+            ("Steps", f"{_steps:,.0f}" if _steps is not None else None, ""),
+            ("Burned", f"{_cals:,.0f}" if _cals is not None else None, "kcal"),
+            ("Resting HR", f"{_rhr:.0f}" if _rhr is not None else None, "bpm"),
+            ("Body Battery", f"{_bb:.0f}" if _bb is not None else None, "peak"),
+            ("Sessions", sessions_str if sessions_str else None, ""),
+        ],
+    )
 
 
 # --- Headline KPIs -------------------------------------------------------
@@ -269,36 +344,42 @@ with st.container(border=True):
 
     with tcol2:
         with st.popover("➕ Log session", width="stretch"):
-            w_date = st.date_input("Date", value=date.today(),
-                                   max_value=date.today(), key="wk_date")
-            iso = w_date.isoformat()
+            wk_date = st.date_input("Date", value=date.today(),
+                                    max_value=date.today(), key="wk_date")
+            iso = wk_date.isoformat()
             existing = set(
                 workouts_all[workouts_all["date"] == pd.Timestamp(iso)]["type"]
             ) if not workouts_all.empty else set()
-            keys = [t["key"] for t in TRAINING_TYPES]
             labels = {t["key"]: t["label"] for t in TRAINING_TYPES}
-            chosen = st.multiselect(
-                "Sessions that day", keys,
-                default=[k for k in keys if k in existing],
-                format_func=lambda k: labels[k], key="wk_sel",
-            )
-            if st.button("Save sessions", width="stretch", type="primary", key="wk_save"):
-                chosen_set = set(chosen)
-                for k in keys:
-                    if k in chosen_set and k not in existing:
-                        db.add_workout(iso, k)
-                    elif k not in chosen_set and k in existing:
-                        db.remove_workout(iso, k)
-                st.toast("Sessions updated.", icon="✅")
-                st.rerun()
+
+            st.caption("Tap to log a session")
+            bcols = st.columns(len(TRAINING_TYPES))
+            for i, t in enumerate(TRAINING_TYPES):
+                with bcols[i]:
+                    if st.button(t["label"], key=f"add_{t['key']}", width="stretch",
+                                 disabled=t["key"] in existing):
+                        db.add_workout(iso, t["key"])
+                        st.toast(f"Logged {t['label']} for {iso}.", icon="✅")
+                        _refresh()
+
+            if existing:
+                st.caption("Logged that day — tap to remove")
+                rcols = st.columns(len(existing))
+                for i, k in enumerate(sorted(existing)):
+                    with rcols[i]:
+                        if st.button(f"✕ {labels.get(k, k)}", key=f"rm_{k}",
+                                     width="stretch"):
+                            db.remove_workout(iso, k)
+                            st.toast(f"Removed {labels.get(k, k)}.", icon="🗑️")
+                            _refresh()
 
     wk = filter_range(workouts_all, RANGES[range_label])
     chart = ui.training_chart(wk, TRAINING_TYPES)
     if chart is not None:
         st.altair_chart(chart, width="stretch")
     else:
-        ui.empty_state("🏋️", "Log your F1/F2/F3, ultimate and runs to see weekly "
-                            "training volume build up here.")
+        ui.empty_state("🏋️", "Tap **Log session** to record your F1/F2/F3, ultimate "
+                            "and runs — they'll appear here on a per-day timeline.")
 
 
 # --- Recovery ------------------------------------------------------------
