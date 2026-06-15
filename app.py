@@ -200,16 +200,22 @@ with hcol2:
     ) or "4w"
 with hcol3:
     with st.popover("⚖️ Log weight", width="stretch"):
-        w_log_date = st.date_input("Date", value=date.today(), max_value=date.today(),
-                                   key="w_date")
+        w_log_date = st.session_state.get("w_date", date.today())
+        if w_log_date > date.today():
+            w_log_date = date.today()
+        w_is_today = w_log_date == date.today()
+
         weight_in = st.number_input(
             "Weight (kg)", min_value=30.0, max_value=300.0,
             value=float(round(prefill, 1)), step=0.1, format="%.1f", key="w_val",
         )
-        if st.button("💾 Save", width="stretch", type="primary"):
+        if st.button(f"💾 Save for {'today' if w_is_today else w_log_date.isoformat()}",
+                     width="stretch", type="primary"):
             db.upsert_weight(w_log_date.isoformat(), weight_in)
+            st.session_state["w_date"] = date.today()
             st.toast(f"Saved {weight_in:.1f} kg for {w_log_date.isoformat()}.", icon="✅")
             _refresh()
+        st.date_input("Log for a different day", max_value=date.today(), key="w_date")
         if last_weight is not None:
             st.caption(f"Last logged: {last_weight:.1f} kg")
 
@@ -344,21 +350,24 @@ with st.container(border=True):
 
     with tcol2:
         with st.popover("➕ Log session", width="stretch"):
-            wk_date = st.date_input("Date", value=date.today(),
-                                    max_value=date.today(), key="wk_date")
-            iso = wk_date.isoformat()
+            wk_log_date = st.session_state.get("wk_date", date.today())
+            if wk_log_date > date.today():
+                wk_log_date = date.today()
+            iso = wk_log_date.isoformat()
+            wk_is_today = wk_log_date == date.today()
             existing = set(
                 workouts_all[workouts_all["date"] == pd.Timestamp(iso)]["type"]
             ) if not workouts_all.empty else set()
             labels = {t["key"]: t["label"] for t in TRAINING_TYPES}
 
-            st.caption("Tap to log a session")
+            st.markdown(f"**Logging for {'today' if wk_is_today else iso}**")
             bcols = st.columns(len(TRAINING_TYPES))
             for i, t in enumerate(TRAINING_TYPES):
                 with bcols[i]:
                     if st.button(t["label"], key=f"add_{t['key']}", width="stretch",
                                  disabled=t["key"] in existing):
                         db.add_workout(iso, t["key"])
+                        st.session_state["wk_date"] = date.today()
                         st.toast(f"Logged {t['label']} for {iso}.", icon="✅")
                         _refresh()
 
@@ -370,16 +379,29 @@ with st.container(border=True):
                         if st.button(f"✕ {labels.get(k, k)}", key=f"rm_{k}",
                                      width="stretch"):
                             db.remove_workout(iso, k)
+                            st.session_state["wk_date"] = date.today()
                             st.toast(f"Removed {labels.get(k, k)}.", icon="🗑️")
                             _refresh()
 
-    wk = filter_range(workouts_all, RANGES[range_label])
-    chart = ui.training_chart(wk, TRAINING_TYPES)
-    if chart is not None:
-        st.altair_chart(chart, width="stretch")
+            st.date_input("Log a different day", max_value=date.today(), key="wk_date")
+
+    # Calendar heatmap over the selected range.
+    days = RANGES[range_label]
+    if days:
+        cal_start = today_ts - pd.Timedelta(days=days - 1)
+    elif not workouts_all.empty:
+        cal_start = workouts_all["date"].min()
     else:
+        cal_start = today_ts - pd.Timedelta(days=27)
+    wk = (workouts_all[workouts_all["date"] >= cal_start]
+          if not workouts_all.empty else workouts_all)
+
+    if workouts_all.empty:
         ui.empty_state("🏋️", "Tap **Log session** to record your F1/F2/F3, ultimate "
-                            "and runs — they'll appear here on a per-day timeline.")
+                            "and runs — they'll appear here as a training calendar.")
+    else:
+        st.altair_chart(ui.training_calendar(wk, TRAINING_TYPES, cal_start, today_ts),
+                        width="stretch")
 
 
 # --- Recovery ------------------------------------------------------------

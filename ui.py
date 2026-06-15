@@ -106,15 +106,19 @@ def inject_css():
         .empty-tx { font-size:.92rem; }
 
         /* Today strip */
-        .today { display:flex; flex-wrap:wrap; gap:1.4rem 2rem; align-items:center; }
-        .today-date { font-weight:700; font-size:1rem; color:#e6edf3; padding-right:.4rem;
-                      border-right:1px solid rgba(255,255,255,.10); }
-        .tstat { display:flex; flex-direction:column; gap:.15rem; }
-        .tstat-l { font-size:.68rem; color:#9aa4b2; text-transform:uppercase;
-                   letter-spacing:.06em; font-weight:600; }
-        .tstat-v { font-size:1.2rem; font-weight:700; color:#e6edf3; line-height:1; }
-        .tstat-v .u { font-size:.78rem; color:#6b7480; font-weight:500; margin-left:.12rem; }
-        .tstat-v.muted { color:#39424f; }
+        .today { display:grid; align-items:center; }
+        .today-date { padding:.1rem 1.4rem .1rem .3rem; }
+        .today-date .d1 { font-size:.66rem; color:#10b981; text-transform:uppercase;
+                          letter-spacing:.1em; font-weight:700; }
+        .today-date .d2 { font-size:1.05rem; font-weight:700; color:#e6edf3;
+                          margin-top:.2rem; }
+        .tstat { padding:.15rem 1.15rem; border-left:1px solid rgba(255,255,255,.07); }
+        .tstat-l { font-size:.64rem; color:#9aa4b2; text-transform:uppercase;
+                   letter-spacing:.07em; font-weight:600; margin-bottom:.3rem; }
+        .tstat-v { font-size:1.3rem; font-weight:700; color:#e6edf3; line-height:1;
+                   letter-spacing:-.01em; }
+        .tstat-v .u { font-size:.72rem; color:#6b7480; font-weight:500; margin-left:.12rem; }
+        .tstat-v.muted { color:#4a5260; font-size:.95rem; font-weight:600; }
 
         /* Soften native bordered containers */
         div[data-testid="stVerticalBlockBorderWrapper"] { border-radius:16px; }
@@ -147,17 +151,22 @@ def section(title: str):
 
 
 def today_card(date_label: str, items: list[tuple]):
-    """A glanceable strip of today's stats. items = [(label, value, unit), ...];
-    value None renders a muted dash."""
-    cells = [f'<div class="today-date">{date_label}</div>']
+    """A glanceable, evenly-distributed strip of today's stats.
+    items = [(label, value, unit), ...]; value None renders a muted dash."""
+    cells = [f'<div class="today-date"><div class="d1">Today</div>'
+             f'<div class="d2">{date_label}</div></div>']
     for label, value, unit in items:
         if value is None:
             v = '<span class="tstat-v muted">—</span>'
         else:
             u = f'<span class="u">{unit}</span>' if unit else ""
             v = f'<span class="tstat-v">{value}{u}</span>'
-        cells.append(f'<div class="tstat"><span class="tstat-l">{label}</span>{v}</div>')
-    st.markdown(f'<div class="today">{"".join(cells)}</div>', unsafe_allow_html=True)
+        cells.append(f'<div class="tstat"><div class="tstat-l">{label}</div>{v}</div>')
+    cols = f"max-content repeat({len(items)}, minmax(0, 1fr))"
+    st.markdown(
+        f'<div class="today" style="grid-template-columns:{cols};">{"".join(cells)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def kpi(label: str, value: str, unit: str | None = None, sub: str | None = None,
@@ -279,34 +288,56 @@ def weight_chart(df: pd.DataFrame):
     return _base_theme(chart)
 
 
-def training_chart(workouts: pd.DataFrame, types: list[dict]):
-    """Per-day training timeline: one coloured marker per session on its actual
-    date, with a lane per session type. Reads like a training calendar."""
-    if workouts is None or workouts.empty:
-        return None
+def training_calendar(workouts: pd.DataFrame, types: list[dict],
+                      start: pd.Timestamp, end: pd.Timestamp):
+    """GitHub-style calendar heatmap: a cell per day (rows = weekday, columns =
+    week), coloured by that day's session type. Looks clean with sparse or
+    dense data. Empty days show as faint cells."""
     key_to_label = {t["key"]: t["label"] for t in types}
+    rank = {t["key"]: i for i, t in enumerate(types)}
     order = [t["label"] for t in types]
     colors = [t["color"] for t in types]
 
-    w = workouts.copy()
-    w["label"] = w["type"].map(key_to_label).fillna(w["type"])
+    days = pd.date_range(start.normalize(), end.normalize(), freq="D")
+    if len(days) == 0:
+        return None
+    cal = pd.DataFrame({"date": days})
+    cal["week"] = cal["date"] - pd.to_timedelta(cal["date"].dt.dayofweek, unit="D")
+    cal["dow"] = cal["date"].dt.strftime("%a")
 
-    height = 46 * len(order)
-    chart = (
-        alt.Chart(w)
-        .mark_square(size=150, opacity=0.95)
+    if workouts is not None and not workouts.empty:
+        w = workouts.copy()
+        w["label"] = w["type"].map(key_to_label).fillna(w["type"])
+        w["rank"] = w["type"].map(rank).fillna(99)
+        primary = (w.sort_values("rank").groupby("date", as_index=False)
+                   .first()[["date", "label"]])
+        cal = cal.merge(primary, on="date", how="left")
+    else:
+        cal["label"] = None
+
+    dow_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    n_weeks = cal["week"].nunique()
+    base = alt.Chart(cal).encode(
+        x=alt.X("week:T", title=None,
+                axis=alt.Axis(format="%b %d", tickCount=min(n_weeks, 10),
+                              labelAngle=0, grid=False)),
+        y=alt.Y("dow:N", title=None, sort=dow_order, axis=alt.Axis(grid=False)),
+    )
+    bg = base.mark_square(size=300, cornerRadius=5, color="#161b22",
+                          stroke="#222b30", strokeWidth=1)
+    fg = (
+        base.transform_filter("isValid(datum.label)")
+        .mark_square(size=300, cornerRadius=5)
         .encode(
-            x=alt.X("date:T", title=None, axis=alt.Axis(format="%b %d", tickCount=6)),
-            y=alt.Y("label:N", title=None, sort=order,
-                    axis=alt.Axis(labelFontWeight="bold")),
             color=alt.Color("label:N", scale=alt.Scale(domain=order, range=colors),
-                            legend=None),
+                            legend=alt.Legend(orient="top", title=None, labelColor=MUTED,
+                                              labelFont="Inter", symbolType="square")),
             tooltip=[alt.Tooltip("date:T", title="Date"),
                      alt.Tooltip("label:N", title="Session")],
         )
-        .properties(height=height)
     )
-    return _base_theme(chart, y_grid=True)
+    chart = (bg + fg).properties(height=210)
+    return _base_theme(chart, y_grid=False)
 
 
 def chips(items: list[tuple]):
