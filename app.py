@@ -26,15 +26,16 @@ import db
 import garmin_sync
 import metrics
 import ui
+from config import TRAINING_TYPES, WEEKLY_SESSION_TARGET
 
-st.set_page_config(page_title="Fat-loss & Recovery", page_icon="🏃", layout="wide")
+st.set_page_config(page_title="Health Dashboard", page_icon="🩺", layout="wide")
 ui.inject_css()
 db.init_db()
 
 
 # --- Range selector ------------------------------------------------------
 
-RANGES = {"2 weeks": 14, "4 weeks": 28, "8 weeks": 56, "All": None}
+RANGES = {"1w": 7, "2w": 14, "4w": 28, "8w": 56, "All": None}
 
 
 def filter_range(df: pd.DataFrame, days: int | None) -> pd.DataFrame:
@@ -133,6 +134,7 @@ with st.sidebar:
 
 df = db.load_dataframe()
 df = metrics.add_weight_trend(df)
+workouts_all = db.get_workouts()
 
 latest_garmin = db.latest_garmin_date()
 synced_txt = f"Garmin synced through {latest_garmin}" if latest_garmin else "No Garmin data yet"
@@ -144,15 +146,15 @@ today_iso = date.today().isoformat()
 last_weight = db.latest_weight()
 prefill = last_weight if last_weight is not None else 87.0
 
-hcol1, hcol2, hcol3 = st.columns([2.4, 1.7, 1], vertical_alignment="bottom")
+hcol1, hcol2, hcol3 = st.columns([2.6, 1.5, 1], vertical_alignment="bottom")
 with hcol1:
-    ui.header("Fat-loss & Recovery",
-              "Weekly trend and recovery at a glance · cutting on ~2,850 kcal maintenance")
+    ui.header("Health Dashboard",
+              "Weight, recovery & training at a glance · cutting on ~2,850 kcal maintenance")
 with hcol2:
     range_label = st.segmented_control(
-        "Range", list(RANGES.keys()), default="4 weeks",
+        "Range", list(RANGES.keys()), default="4w",
         selection_mode="single", label_visibility="collapsed",
-    ) or "4 weeks"
+    ) or "4w"
 with hcol3:
     with st.popover("⚖️ Log weight", width="stretch"):
         weight_in = st.number_input(
@@ -240,6 +242,63 @@ st.write("")
 ui.status_banner(status.key, status.label, status.nudge)
 
 wdf = filter_range(df, RANGES[range_label])
+
+
+# --- Training ------------------------------------------------------------
+
+ui.section("Training")
+with st.container(border=True):
+    tcol1, tcol2 = st.columns([3, 1], vertical_alignment="center")
+
+    # Sessions logged in the last 7 days, per type.
+    week_cut = pd.Timestamp(date.today()) - pd.Timedelta(days=6)
+    recent = (workouts_all[workouts_all["date"] >= week_cut]
+              if not workouts_all.empty else workouts_all)
+    counts = (recent["type"].value_counts().to_dict()
+              if not recent.empty else {})
+    total_week = int(sum(counts.values()))
+
+    with tcol1:
+        if total_week:
+            ui.chips([(t["label"], counts.get(t["key"], 0), t["color"])
+                      for t in TRAINING_TYPES if counts.get(t["key"], 0)])
+            st.caption(f"{total_week} session(s) in the last 7 days "
+                       f"· target {WEEKLY_SESSION_TARGET}/week")
+        else:
+            st.caption("No sessions logged in the last 7 days — log one →")
+
+    with tcol2:
+        with st.popover("➕ Log session", width="stretch"):
+            w_date = st.date_input("Date", value=date.today(),
+                                   max_value=date.today(), key="wk_date")
+            iso = w_date.isoformat()
+            existing = set(
+                workouts_all[workouts_all["date"] == pd.Timestamp(iso)]["type"]
+            ) if not workouts_all.empty else set()
+            keys = [t["key"] for t in TRAINING_TYPES]
+            labels = {t["key"]: t["label"] for t in TRAINING_TYPES}
+            chosen = st.multiselect(
+                "Sessions that day", keys,
+                default=[k for k in keys if k in existing],
+                format_func=lambda k: labels[k], key="wk_sel",
+            )
+            if st.button("Save sessions", width="stretch", type="primary", key="wk_save"):
+                chosen_set = set(chosen)
+                for k in keys:
+                    if k in chosen_set and k not in existing:
+                        db.add_workout(iso, k)
+                    elif k not in chosen_set and k in existing:
+                        db.remove_workout(iso, k)
+                st.toast("Sessions updated.", icon="✅")
+                st.rerun()
+
+    wk = filter_range(workouts_all, RANGES[range_label])
+    chart = ui.training_chart(wk, TRAINING_TYPES)
+    if chart is not None:
+        st.altair_chart(chart, width="stretch")
+    else:
+        ui.empty_state("🏋️", "Log your F1/F2/F3, ultimate and runs to see weekly "
+                            "training volume build up here.")
 
 
 # --- Recovery ------------------------------------------------------------

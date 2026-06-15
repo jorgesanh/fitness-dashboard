@@ -254,6 +254,56 @@ def weight_chart(df: pd.DataFrame):
     return _base_theme(chart)
 
 
+def training_chart(workouts: pd.DataFrame, types: list[dict], height: int = 220):
+    """Stacked bar of sessions per week, coloured by session type."""
+    if workouts is None or workouts.empty:
+        return None
+    key_to_label = {t["key"]: t["label"] for t in types}
+    order = [t["label"] for t in types]
+    colors = [t["color"] for t in types]
+
+    w = workouts.copy()
+    w["label"] = w["type"].map(key_to_label).fillna(w["type"])
+    # week start (Monday)
+    w["week"] = w["date"] - pd.to_timedelta(w["date"].dt.dayofweek, unit="D")
+    grouped = w.groupby(["week", "label"]).size().reset_index(name="sessions")
+
+    chart = (
+        alt.Chart(grouped)
+        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3, size=20)
+        .encode(
+            x=alt.X("week:T", title=None, axis=alt.Axis(format="%b %d", tickCount=6)),
+            y=alt.Y("sessions:Q", title="sessions",
+                    axis=alt.Axis(tickMinStep=1)),
+            color=alt.Color("label:N", title=None,
+                            scale=alt.Scale(domain=order, range=colors),
+                            legend=alt.Legend(orient="top", labelColor=MUTED,
+                                              labelFont="Inter", symbolType="square")),
+            order=alt.Order("label:N"),
+            tooltip=[alt.Tooltip("week:T", title="Week of"),
+                     alt.Tooltip("label:N", title="Type"),
+                     alt.Tooltip("sessions:Q", title="Sessions")],
+        )
+        .properties(height=height)
+    )
+    return _base_theme(chart)
+
+
+def chips(items: list[tuple]):
+    """Render small coloured count chips: items = [(label, count, color), ...]."""
+    html = '<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.2rem 0 .4rem;">'
+    for label, count, color in items:
+        html += (
+            f'<span style="display:inline-flex;align-items:center;gap:.4rem;'
+            f'background:rgba(255,255,255,.04);border:1px solid {color}55;'
+            f'border-radius:999px;padding:.3rem .7rem;font-size:.82rem;font-weight:600;">'
+            f'<span style="width:8px;height:8px;border-radius:50%;background:{color};"></span>'
+            f'{label}<span style="color:{MUTED};font-weight:500;">{count}</span></span>'
+        )
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def spark(df: pd.DataFrame, col: str, color: str, fmt: str = ".0f",
           transform=None, height: int = 120):
     """Compact trend chart for a recovery/activity metric."""

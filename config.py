@@ -31,3 +31,17 @@ AGGRESSIVE_RATE = 0.8
 
 # A 14-day moving-average change smaller than this (kg) counts as "stalled".
 STALL_BAND_KG = 0.2
+
+# --- Training -----------------------------------------------------------
+# Session types you log. `cat` groups them for the weekly summary; `color`
+# drives the training chart. Tweak these to match your plan.
+TRAINING_TYPES = [
+    {"key": "F1", "label": "F1", "cat": "Lift", "color": "#10b981"},
+    {"key": "F2", "label": "F2", "cat": "Lift", "color": "#34d399"},
+    {"key": "F3", "label": "F3", "cat": "Lift", "color": "#6ee7b7"},
+    {"key": "Ultimate", "label": "Ultimate", "cat": "Sport", "color": "#60a5fa"},
+    {"key": "Running", "label": "Run", "cat": "Cardio", "color": "#fbbf24"},
+]
+
+# Weekly training target (sessions/week) — shown as context in the summary.
+WEEKLY_SESSION_TARGET = 5

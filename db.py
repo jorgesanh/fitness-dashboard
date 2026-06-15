@@ -103,6 +103,16 @@ def init_db():
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS workouts (
+                date       TEXT,
+                type       TEXT,
+                created_at TEXT,
+                PRIMARY KEY (date, type)
+            )
+            """
+        )
 
 
 # --- Garmin daily metrics -----------------------------------------------
@@ -177,6 +187,33 @@ def latest_weight() -> float | None:
     if df.empty:
         return None
     return float(df["weight_kg"].iloc[0])
+
+
+# --- Workouts ------------------------------------------------------------
+
+def add_workout(day: str, wtype: str):
+    sql = """
+        INSERT INTO workouts (date, type, created_at) VALUES (?, ?, ?)
+        ON CONFLICT(date, type) DO NOTHING
+    """
+    with _connect() as conn:
+        conn.cursor().execute(
+            _q(sql), [day, wtype, datetime.now().isoformat(timespec="seconds")]
+        )
+
+
+def remove_workout(day: str, wtype: str):
+    with _connect() as conn:
+        conn.cursor().execute(
+            _q("DELETE FROM workouts WHERE date=? AND type=?"), [day, wtype]
+        )
+
+
+def get_workouts() -> pd.DataFrame:
+    df = _query_df("SELECT date, type FROM workouts")
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"])
+    return df
 
 
 # --- Combined read for the dashboard ------------------------------------
