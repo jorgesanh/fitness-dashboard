@@ -106,19 +106,36 @@ def inject_css():
         .empty-tx { font-size:.92rem; }
 
         /* Today strip */
-        .today { display:grid; align-items:center; }
-        .today-date { padding:.1rem 1.4rem .1rem .3rem; }
-        .today-date .d1 { font-size:.66rem; color:#10b981; text-transform:uppercase;
-                          letter-spacing:.1em; font-weight:700; }
+        .today { display:grid; align-items:stretch; }
+        .today-date { padding:.15rem 1.3rem .15rem .3rem; display:flex;
+                      flex-direction:column; justify-content:center; }
+        .today-date .d1 { font-size:.64rem; color:#10b981; text-transform:uppercase;
+                          letter-spacing:.12em; font-weight:700; }
         .today-date .d2 { font-size:1.05rem; font-weight:700; color:#e6edf3;
-                          margin-top:.2rem; }
-        .tstat { padding:.15rem 1.15rem; border-left:1px solid rgba(255,255,255,.07); }
-        .tstat-l { font-size:.64rem; color:#9aa4b2; text-transform:uppercase;
-                   letter-spacing:.07em; font-weight:600; margin-bottom:.3rem; }
-        .tstat-v { font-size:1.3rem; font-weight:700; color:#e6edf3; line-height:1;
-                   letter-spacing:-.01em; }
+                          margin-top:.25rem; white-space:nowrap; }
+        .tstat { padding:.2rem .6rem; border-left:1px solid rgba(255,255,255,.07);
+                 display:flex; flex-direction:column; align-items:center;
+                 justify-content:center; text-align:center; gap:.35rem; }
+        .tstat-l { font-size:.63rem; color:#9aa4b2; text-transform:uppercase;
+                   letter-spacing:.07em; font-weight:600; }
+        .tstat-v { font-size:1.28rem; font-weight:700; color:#e6edf3; line-height:1;
+                   letter-spacing:-.01em; white-space:nowrap; }
         .tstat-v .u { font-size:.72rem; color:#6b7480; font-weight:500; margin-left:.12rem; }
-        .tstat-v.muted { color:#4a5260; font-size:.95rem; font-weight:600; }
+        .tstat-v.muted { color:#4a5260; font-size:1.1rem; font-weight:700; }
+
+        /* Session log */
+        .slog { display:flex; flex-direction:column; max-height:340px; overflow-y:auto; }
+        .slog-row { display:flex; align-items:center; gap:1rem; padding:.6rem .15rem;
+                    border-bottom:1px solid rgba(255,255,255,.05); }
+        .slog-row:last-child { border-bottom:none; }
+        .slog-date { font-size:.85rem; color:#c2cad4; font-weight:600; width:130px;
+                     flex-shrink:0; }
+        .slog-date .dim { color:#6b7480; font-weight:500; }
+        .slog-chips { display:flex; flex-wrap:wrap; gap:.45rem; }
+        .tchip { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px;
+                 padding:.28rem .7rem; font-size:.8rem; font-weight:600; color:#e6edf3;
+                 background:rgba(255,255,255,.04); border:1px solid transparent; }
+        .tchip .dot { width:8px; height:8px; border-radius:50%; }
 
         /* Soften native bordered containers */
         div[data-testid="stVerticalBlockBorderWrapper"] { border-radius:16px; }
@@ -288,56 +305,36 @@ def weight_chart(df: pd.DataFrame):
     return _base_theme(chart)
 
 
-def training_calendar(workouts: pd.DataFrame, types: list[dict],
-                      start: pd.Timestamp, end: pd.Timestamp):
-    """GitHub-style calendar heatmap: a cell per day (rows = weekday, columns =
-    week), coloured by that day's session type. Looks clean with sparse or
-    dense data. Empty days show as faint cells."""
+def session_log(workouts: pd.DataFrame, types: list[dict], limit: int = 60) -> bool:
+    """A dated list of training sessions, most recent first, with colour-coded
+    type chips. Robust and readable with sparse or dense data. Returns False if
+    there's nothing to show."""
+    if workouts is None or workouts.empty:
+        return False
     key_to_label = {t["key"]: t["label"] for t in types}
+    color = {t["key"]: t["color"] for t in types}
     rank = {t["key"]: i for i, t in enumerate(types)}
-    order = [t["label"] for t in types]
-    colors = [t["color"] for t in types]
 
-    days = pd.date_range(start.normalize(), end.normalize(), freq="D")
-    if len(days) == 0:
-        return None
-    cal = pd.DataFrame({"date": days})
-    cal["week"] = cal["date"] - pd.to_timedelta(cal["date"].dt.dayofweek, unit="D")
-    cal["dow"] = cal["date"].dt.strftime("%a")
-
-    if workouts is not None and not workouts.empty:
-        w = workouts.copy()
-        w["label"] = w["type"].map(key_to_label).fillna(w["type"])
-        w["rank"] = w["type"].map(rank).fillna(99)
-        primary = (w.sort_values("rank").groupby("date", as_index=False)
-                   .first()[["date", "label"]])
-        cal = cal.merge(primary, on="date", how="left")
-    else:
-        cal["label"] = None
-
-    dow_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    n_weeks = cal["week"].nunique()
-    base = alt.Chart(cal).encode(
-        x=alt.X("week:T", title=None,
-                axis=alt.Axis(format="%b %d", tickCount=min(n_weeks, 10),
-                              labelAngle=0, grid=False)),
-        y=alt.Y("dow:N", title=None, sort=dow_order, axis=alt.Axis(grid=False)),
-    )
-    bg = base.mark_square(size=300, cornerRadius=5, color="#161b22",
-                          stroke="#222b30", strokeWidth=1)
-    fg = (
-        base.transform_filter("isValid(datum.label)")
-        .mark_square(size=300, cornerRadius=5)
-        .encode(
-            color=alt.Color("label:N", scale=alt.Scale(domain=order, range=colors),
-                            legend=alt.Legend(orient="top", title=None, labelColor=MUTED,
-                                              labelFont="Inter", symbolType="square")),
-            tooltip=[alt.Tooltip("date:T", title="Date"),
-                     alt.Tooltip("label:N", title="Session")],
+    w = workouts.copy()
+    w["rank"] = w["type"].map(rank).fillna(99)
+    rows_html = []
+    dates = sorted(w["date"].unique(), reverse=True)[: limit]
+    for d in dates:
+        ts = pd.Timestamp(d)
+        day = w[w["date"] == ts].sort_values("rank")
+        chips = "".join(
+            f'<span class="tchip" style="border-color:{color.get(k, "#888")}55;">'
+            f'<span class="dot" style="background:{color.get(k, "#888")};"></span>'
+            f'{key_to_label.get(k, k)}</span>'
+            for k in day["type"]
         )
-    )
-    chart = (bg + fg).properties(height=210)
-    return _base_theme(chart, y_grid=False)
+        label = f'{ts:%a} <span class="dim">· {ts:%b} {ts.day}</span>'
+        rows_html.append(
+            f'<div class="slog-row"><div class="slog-date">{label}</div>'
+            f'<div class="slog-chips">{chips}</div></div>'
+        )
+    st.markdown(f'<div class="slog">{"".join(rows_html)}</div>', unsafe_allow_html=True)
+    return True
 
 
 def chips(items: list[tuple]):

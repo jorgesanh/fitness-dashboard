@@ -385,23 +385,15 @@ with st.container(border=True):
 
             st.date_input("Log a different day", max_value=date.today(), key="wk_date")
 
-    # Calendar heatmap over the selected range.
-    days = RANGES[range_label]
-    if days:
-        cal_start = today_ts - pd.Timedelta(days=days - 1)
-    elif not workouts_all.empty:
-        cal_start = workouts_all["date"].min()
-    else:
-        cal_start = today_ts - pd.Timedelta(days=27)
-    wk = (workouts_all[workouts_all["date"] >= cal_start]
-          if not workouts_all.empty else workouts_all)
-
+    # Session log over the selected range, most recent first.
+    wk = filter_range(workouts_all, RANGES[range_label])
     if workouts_all.empty:
         ui.empty_state("🏋️", "Tap **Log session** to record your F1/F2/F3, ultimate "
-                            "and runs — they'll appear here as a training calendar.")
+                            "and runs — they'll appear here as a dated log.")
+    elif wk.empty:
+        st.caption("No sessions logged in this range — widen it or log one above.")
     else:
-        st.altair_chart(ui.training_calendar(wk, TRAINING_TYPES, cal_start, today_ts),
-                        width="stretch")
+        ui.session_log(wk, TRAINING_TYPES)
 
 
 # --- Recovery ------------------------------------------------------------
