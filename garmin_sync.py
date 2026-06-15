@@ -67,6 +67,22 @@ def _token_path() -> str:
     return str(Path(TOKEN_STORE).expanduser())
 
 
+def has_credentials() -> bool:
+    return bool(os.getenv("GARMIN_EMAIL") and os.getenv("GARMIN_PASSWORD"))
+
+
+def has_cached_token() -> bool:
+    p = Path(_token_path())
+    return p.is_dir() and any(p.iterdir())
+
+
+def is_available() -> bool:
+    """True if this host can attempt a Garmin sync (has creds or a cached
+    token). False on a typical cloud deploy, where Garmin syncing is instead
+    done by the local sync_job.py."""
+    return has_credentials() or has_cached_token()
+
+
 def login():
     """Attempt login, preferring the cached token.
 

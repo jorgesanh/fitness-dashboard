@@ -85,7 +85,12 @@ def _do_sync(client, full_backfill: bool):
 
 # --- Auto-sync once per session -----------------------------------------
 
-if "did_initial_sync" not in st.session_state:
+GARMIN_AVAILABLE = garmin_sync.is_available()
+
+# Only auto-sync where Garmin is actually reachable (local machine with creds or
+# a cached token). On a cloud deploy this is skipped — the dashboard shows the
+# data that the local sync_job.py keeps current in the shared database.
+if GARMIN_AVAILABLE and "did_initial_sync" not in st.session_state:
     st.session_state["did_initial_sync"] = True
     with st.spinner("Checking Garmin for new data…"):
         run_sync(full_backfill=not db.get_existing_garmin_dates())
@@ -98,12 +103,19 @@ with st.sidebar:
 
     selected_range = st.radio("Chart range", list(RANGES.keys()), index=1, horizontal=True)
 
-    if st.button("🔄 Sync Garmin now", use_container_width=True):
-        run_sync(full_backfill=False)
+    if GARMIN_AVAILABLE:
+        if st.button("🔄 Sync Garmin now", use_container_width=True):
+            run_sync(full_backfill=False)
 
-    with st.expander("Backfill last 90 days"):
-        if st.button("Run full backfill", use_container_width=True):
-            run_sync(full_backfill=True)
+        with st.expander("Backfill last 90 days"):
+            if st.button("Run full backfill", use_container_width=True):
+                run_sync(full_backfill=True)
+    else:
+        st.info(
+            "Garmin syncing runs from your local machine (`sync_job.py`), not "
+            "from here. This dashboard shows the latest synced data and lets you "
+            "log weight."
+        )
 
     # MFA completion flow (only shows when a login is mid-MFA).
     if st.session_state.get("mfa_pending"):
