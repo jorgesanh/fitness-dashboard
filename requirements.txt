@@ -1,0 +1,8 @@
+streamlit>=1.33
+garminconnect>=0.3.0
+curl_cffi
+ua-generator
+python-dotenv>=1.0
+pandas>=2.0
+numpy>=1.24
+altair>=5.0

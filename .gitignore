@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Garmin token cache (in case it lands in the project dir)
+.garminconnect/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.streamlit/secrets.toml
