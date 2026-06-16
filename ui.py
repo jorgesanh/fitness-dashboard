@@ -354,31 +354,35 @@ def chips(items: list[tuple]):
 
 def spark(df: pd.DataFrame, col: str, color: str, fmt: str = ".0f",
           transform=None, height: int = 120):
-    """Compact trend chart for a recovery/activity metric."""
-    sub = df[["date", col]].dropna().copy()
-    if len(sub) < 2:  # need at least two points to draw a trend line
+    """Compact trend chart for a recovery/activity metric.
+
+    Honest about gaps: keeps every day in range (missing days stay null) so the
+    line BREAKS at unrecorded days instead of bridging them with a fabricated
+    straight segment. A dot marks each day that was actually measured.
+    """
+    if col not in df:
         return None
-    if transform:
-        sub[col] = transform(sub[col])
+    meas = df[["date", col]].dropna().copy()
+    if transform is not None:
+        meas[col] = transform(meas[col])
+    if len(meas) < 2:  # need at least two real measurements
+        return None
+    meas = meas.sort_values("date")
+
+    # Split into runs of consecutive days: the line only connects days that are
+    # actually adjacent, so a gap of missing days breaks the line rather than
+    # being bridged by a fabricated straight segment.
+    day_num = (meas["date"] - meas["date"].min()).dt.days
+    meas["seg"] = (day_num.diff().fillna(1) > 1).cumsum()
+
     x = alt.X("date:T", title=None, axis=alt.Axis(format="%b %d", tickCount=4))
-    area = (
-        alt.Chart(sub).mark_area(
-            line=False,
-            color=alt.Gradient(
-                gradient="linear",
-                stops=[alt.GradientStop(color=color, offset=0),
-                       alt.GradientStop(color=color, offset=1)],
-                x1=1, x2=1, y1=1, y2=0,
-            ),
-            opacity=0.14,
-        ).encode(x=x, y=alt.Y(f"{col}:Q", title=None, scale=alt.Scale(zero=False)))
-    )
-    line = (
-        alt.Chart(sub).mark_line(strokeWidth=2, color=color).encode(
-            x=x, y=alt.Y(f"{col}:Q", title=None, scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"),
-                     alt.Tooltip(f"{col}:Q", title=col, format=fmt)],
-        )
-    )
-    chart = (area + line).properties(height=height)
+    y = alt.Y(f"{col}:Q", title=None, scale=alt.Scale(zero=False))
+    tip = [alt.Tooltip("date:T", title="Date"),
+           alt.Tooltip(f"{col}:Q", title=col, format=fmt)]
+
+    line = alt.Chart(meas).mark_line(strokeWidth=2, color=color).encode(
+        x=x, y=y, detail="seg:N")
+    pts = alt.Chart(meas).mark_circle(size=28, color=color, opacity=0.9).encode(
+        x=x, y=y, tooltip=tip)
+    chart = (line + pts).properties(height=height)
     return _base_theme(chart, y_grid=False)
