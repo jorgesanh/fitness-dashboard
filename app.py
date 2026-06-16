@@ -262,7 +262,7 @@ with st.container(border=True):
             ("Weight", f"{_w_today:.1f}" if _w_today is not None else
                        (f"{last_weight:.1f}" if last_weight is not None else None),
              "kg"),
-            ("Sleep", f"{_sleep:.1f}" if _sleep is not None else None, "h"),
+            ("Sleep", ui.hm(_sleep) if _sleep is not None else None, ""),
             ("Steps", f"{_steps:,.0f}" if _steps is not None else None, ""),
             ("Burned", f"{_cals:,.0f}" if _cals is not None else None, "kcal"),
             ("Resting HR", f"{_rhr:.0f}" if _rhr is not None else None, "bpm"),
@@ -425,18 +425,25 @@ def _arrow(slope, good_down=False, deadband=0.0):
     return ("▲" if up else "▼"), (ui.ACCENT if good else ui.AMBER)
 
 
-def _recovery_card(label, col, color, unit, *, fmt="{:.0f}", slope=None,
-                   good_down=False, deadband=0.0, transform=None,
-                   spark_transform=None, spark_fmt=".0f"):
+def _recovery_card(label, col, color, unit, *, fmt="{:.0f}", value_fmt=None,
+                   slope=None, good_down=False, deadband=0.0, transform=None,
+                   spark_transform=None, spark_fmt=".0f", spark_hm=False):
     with st.container(border=True):
         val = _latest(wdf, col, transform=transform)
         arr, acol = _arrow(slope, good_down=good_down, deadband=deadband)
+        if val is None:
+            shown = "—"
+        elif value_fmt is not None:
+            shown = value_fmt(val)
+        else:
+            shown = fmt.format(val)
         ui.recovery_header(
-            label, fmt.format(val) if val is not None else "—",
-            unit=unit if val is not None else "",
+            label, shown, unit=unit if val is not None else "",
             trend=f"{arr} 14d" if arr else None, trend_color=acol,
         )
-        chart = ui.spark(wdf, col, color, fmt=spark_fmt, transform=spark_transform)
+        tip_label = f"{label} ({unit})" if unit in ("bpm", "kcal") else label
+        chart = ui.spark(wdf, col, color, fmt=spark_fmt, transform=spark_transform,
+                         label=tip_label, tip_hm=spark_hm)
         if chart is not None:
             st.altair_chart(chart, width="stretch")
         elif val is not None:
@@ -450,10 +457,10 @@ with r1:
     _recovery_card("Resting HR", "resting_hr", ui.AMBER, "bpm",
                    slope=rec.rhr_slope, good_down=True, deadband=0.1)
 with r2:
-    _recovery_card("Sleep", "sleep_seconds", ui.INDIGO, "h", fmt="{:.1f}",
+    _recovery_card("Sleep", "sleep_seconds", ui.INDIGO, "", value_fmt=ui.hm,
                    slope=rec.sleep_slope, good_down=False, deadband=0.1,
                    transform=lambda v: v / 3600.0,
-                   spark_transform=lambda s: s / 3600.0, spark_fmt=".1f")
+                   spark_transform=lambda s: s / 3600.0, spark_hm=True)
 with r3:
     _recovery_card("Body Battery", "body_battery_high", ui.TEAL, "peak",
                    slope=rec.bb_slope, good_down=False, deadband=0.5)
@@ -468,7 +475,8 @@ with a1:
         val = _latest(wdf, "total_calories")
         ui.recovery_header("Calories burned", f"{val:,.0f}" if val is not None else "—",
                            unit="kcal" if val is not None else "")
-        chart = ui.spark(wdf, "total_calories", ui.AMBER, fmt=",.0f")
+        chart = ui.spark(wdf, "total_calories", ui.AMBER, fmt=",.0f",
+                         label="Calories (kcal)")
         if chart is not None:
             st.altair_chart(chart, width="stretch")
         else:
@@ -477,7 +485,7 @@ with a2:
     with st.container(border=True):
         val = _latest(wdf, "steps")
         ui.recovery_header("Steps", f"{val:,.0f}" if val is not None else "—")
-        chart = ui.spark(wdf, "steps", ui.BLUE, fmt=",.0f")
+        chart = ui.spark(wdf, "steps", ui.BLUE, fmt=",.0f", label="Steps")
         if chart is not None:
             st.altair_chart(chart, width="stretch")
         else:

@@ -167,6 +167,15 @@ def section(title: str):
     st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
 
 
+def hm(hours) -> str:
+    """Format a number of hours as 'Hh Mm' (e.g. 8.2 -> '8h 12m')."""
+    if hours is None or pd.isna(hours):
+        return "—"
+    total = int(round(float(hours) * 60))
+    h, m = divmod(total, 60)
+    return f"{h}h {m}m" if m else f"{h}h"
+
+
 def today_card(date_label: str, items: list[tuple]):
     """A glanceable, evenly-distributed strip of today's stats.
     items = [(label, value, unit), ...]; value None renders a muted dash."""
@@ -268,7 +277,7 @@ def _base_theme(chart, y_grid=True):
 def weight_chart(df: pd.DataFrame):
     """Daily weigh-ins (faint dots) + 7-day moving-average line with area fill."""
     data = df[["date", "weight_kg", "weight_ma7"]].copy()
-    x = alt.X("date:T", title=None, axis=alt.Axis(format="%b %d", tickCount=6))
+    x = alt.X("date:T", title=None, axis=alt.Axis(format="%a %b %d", tickCount=6))
 
     area = (
         alt.Chart(data.dropna(subset=["weight_ma7"]))
@@ -286,22 +295,28 @@ def weight_chart(df: pd.DataFrame):
     points = (
         alt.Chart(data.dropna(subset=["weight_kg"]))
         .mark_circle(size=34, opacity=0.35, color=SLATE)
-        .encode(
-            x=x, y=alt.Y("weight_kg:Q", scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"),
-                     alt.Tooltip("weight_kg:Q", title="Weight", format=".1f")],
-        )
+        .encode(x=x, y=alt.Y("weight_kg:Q", scale=alt.Scale(zero=False)))
     )
     line = (
         alt.Chart(data.dropna(subset=["weight_ma7"]))
         .mark_line(strokeWidth=2.5, color=ACCENT)
+        .encode(x=x, y=alt.Y("weight_ma7:Q", scale=alt.Scale(zero=False)))
+    )
+    # Full-height hover rule that snaps to the nearest day (big hit target).
+    nearest = alt.selection_point(fields=["date"], nearest=True, on="pointerover",
+                                  empty=False, clear="pointerout")
+    rule = (
+        alt.Chart(data).mark_rule(color="rgba(255,255,255,0.28)", strokeWidth=1)
         .encode(
-            x=x, y=alt.Y("weight_ma7:Q", scale=alt.Scale(zero=False)),
-            tooltip=[alt.Tooltip("date:T", title="Date"),
+            x=x,
+            opacity=alt.condition(nearest, alt.value(1), alt.value(0)),
+            tooltip=[alt.Tooltip("date:T", title="Date", format="%a %b %d"),
+                     alt.Tooltip("weight_kg:Q", title="Weight", format=".1f"),
                      alt.Tooltip("weight_ma7:Q", title="7-day avg", format=".2f")],
         )
+        .add_params(nearest)
     )
-    chart = (area + points + line).properties(height=300)
+    chart = (area + line + points + rule).properties(height=300)
     return _base_theme(chart)
 
 
@@ -353,7 +368,8 @@ def chips(items: list[tuple]):
 
 
 def spark(df: pd.DataFrame, col: str, color: str, fmt: str = ".0f",
-          transform=None, height: int = 120):
+          transform=None, height: int = 120, label: str | None = None,
+          tip_hm: bool = False):
     """Compact trend chart for a recovery/activity metric.
 
     Honest about gaps: keeps every day in range (missing days stay null) so the
@@ -375,14 +391,25 @@ def spark(df: pd.DataFrame, col: str, color: str, fmt: str = ".0f",
     day_num = (meas["date"] - meas["date"].min()).dt.days
     meas["seg"] = (day_num.diff().fillna(1) > 1).cumsum()
 
-    x = alt.X("date:T", title=None, axis=alt.Axis(format="%b %d", tickCount=4))
+    x = alt.X("date:T", title=None, axis=alt.Axis(format="%a %b %d", tickCount=3))
     y = alt.Y(f"{col}:Q", title=None, scale=alt.Scale(zero=False))
-    tip = [alt.Tooltip("date:T", title="Date"),
-           alt.Tooltip(f"{col}:Q", title=col, format=fmt)]
+    if tip_hm:
+        meas["__tip"] = meas[col].map(hm)
+        value_tip = alt.Tooltip("__tip:N", title=label or col)
+    else:
+        value_tip = alt.Tooltip(f"{col}:Q", title=label or col, format=fmt)
+    tip = [alt.Tooltip("date:T", title="Date", format="%a %b %d"), value_tip]
 
     line = alt.Chart(meas).mark_line(strokeWidth=2, color=color).encode(
         x=x, y=y, detail="seg:N")
-    pts = alt.Chart(meas).mark_circle(size=28, color=color, opacity=0.9).encode(
-        x=x, y=y, tooltip=tip)
-    chart = (line + pts).properties(height=height)
+    pts = alt.Chart(meas).mark_circle(size=28, color=color, opacity=0.9).encode(x=x, y=y)
+    # Full-height hover rule snapping to nearest day (large hit target).
+    nearest = alt.selection_point(fields=["date"], nearest=True, on="pointerover",
+                                  empty=False, clear="pointerout")
+    rule = (
+        alt.Chart(meas).mark_rule(color="rgba(255,255,255,0.25)", strokeWidth=1)
+        .encode(x=x, opacity=alt.condition(nearest, alt.value(1), alt.value(0)), tooltip=tip)
+        .add_params(nearest)
+    )
+    chart = (line + pts + rule).properties(height=height)
     return _base_theme(chart, y_grid=False)
