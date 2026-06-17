@@ -2,8 +2,8 @@
 [theme]
 base = "dark"
 primaryColor = "#10b981"            # emerald accent (buttons, focus, slider)
-backgroundColor = "#0d1117"         # app background
-secondaryBackgroundColor = "#161b22" # cards, sidebar, inputs
-textColor = "#e6edf3"
+backgroundColor = "#0a0c10"         # app background
+secondaryBackgroundColor = "#13171e" # cards, sidebar, inputs
+textColor = "#eef1f5"
 font = "sans-serif"
-baseRadius = "0.85rem"
+baseRadius = "0.7rem"

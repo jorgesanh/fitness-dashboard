@@ -8,13 +8,13 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-# --- Palette (kept in sync with .streamlit/config.toml) -----------------
-BG = "#0d1117"
-SURFACE = "#161b22"
-BORDER = "rgba(255,255,255,0.08)"
-TEXT = "#e6edf3"
-MUTED = "#9aa4b2"
-FAINT = "#6b7480"
+# --- Palette (kept in sync with .streamlit/config.toml and inject_css) ---
+BG = "#0a0c10"
+SURFACE = "#13171e"
+BORDER = "rgba(255,255,255,0.07)"
+TEXT = "#eef1f5"
+MUTED = "#98a2b1"
+FAINT = "#646e7d"
 
 ACCENT = "#10b981"   # emerald
 BLUE = "#60a5fa"
@@ -41,107 +41,144 @@ def inject_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-        html, body, .stApp, [data-testid="stAppViewContainer"],
-        [data-testid="stSidebar"], button, input, textarea, select {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        :root {
+            --bg:#0a0c10; --surface:#13171e; --surface-2:#171c24;
+            --line:rgba(255,255,255,.07); --line-soft:rgba(255,255,255,.05);
+            --text:#eef1f5; --muted:#98a2b1; --faint:#646e7d; --accent:#10b981;
+            --shadow:0 1px 2px rgba(0,0,0,.35), 0 6px 20px -8px rgba(0,0,0,.55);
+            --radius:18px;
         }
 
-        .block-container { padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1200px; }
+        html, body, .stApp, [data-testid="stAppViewContainer"],
+        [data-testid="stSidebar"], button, input, textarea, select {
+            font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+            -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+        }
+        .stApp { background:
+            radial-gradient(1200px 600px at 50% -200px, rgba(16,185,129,.06), transparent 70%),
+            var(--bg); }
 
-        /* Hide Streamlit's default chrome */
-        [data-testid="stHeader"] { background: transparent; }
-        #MainMenu, footer { visibility: hidden; }
+        .block-container { padding-top:2.4rem; padding-bottom:5rem; max-width:1180px; }
+        [data-testid="stHeader"] { background:transparent; }
+        #MainMenu, footer { visibility:hidden; }
 
         /* Hero header */
         .app-head { display:flex; align-items:flex-end; justify-content:space-between;
-                    gap:1rem; margin-bottom:1.4rem; flex-wrap:wrap; }
-        .app-title { font-size:1.85rem; font-weight:800; letter-spacing:-.02em; margin:0;
-                     line-height:1.1; }
-        .app-sub { color:#9aa4b2; font-size:.9rem; margin-top:.25rem; }
-        .app-meta { color:#6b7480; font-size:.82rem; text-align:right; }
+                    gap:1rem; margin-bottom:1.1rem; flex-wrap:wrap; }
+        .app-title { font-size:1.95rem; font-weight:800; letter-spacing:-.03em; margin:0;
+                     line-height:1.08; color:var(--text); }
+        .app-sub { color:var(--muted); font-size:.9rem; margin-top:.3rem; font-weight:450; }
+        .app-meta { color:var(--faint); font-size:.82rem; text-align:right; }
 
         /* Section label */
-        .section-title { font-size:.78rem; font-weight:600; letter-spacing:.08em;
-            text-transform:uppercase; color:#9aa4b2; margin:1.8rem 0 .7rem; }
+        .section-title { font-size:.74rem; font-weight:600; letter-spacing:.11em;
+            text-transform:uppercase; color:var(--faint); margin:2.1rem 0 .8rem; }
+
+        /* Card surface shared by KPI / today tiles / native containers */
+        .kpi, .tstat,
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background:linear-gradient(180deg, var(--surface-2), var(--surface));
+            border:1px solid var(--line) !important; border-radius:var(--radius) !important;
+            box-shadow:var(--shadow);
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] { padding:.15rem; }
 
         /* KPI cards */
-        .kpi { background:#161b22; border:1px solid rgba(255,255,255,.08); border-radius:16px;
-               padding:1.05rem 1.15rem; height:100%; }
-        .kpi-label { font-size:.78rem; color:#9aa4b2; font-weight:500; margin-bottom:.45rem;
+        .kpi { padding:1.15rem 1.25rem; height:100%; transition:border-color .2s ease; }
+        .kpi:hover { border-color:rgba(255,255,255,.13) !important; }
+        .kpi-label { font-size:.76rem; color:var(--muted); font-weight:500; margin-bottom:.55rem;
                      display:flex; align-items:center; gap:.3rem; }
-        .kpi-value { font-size:1.85rem; font-weight:700; color:#e6edf3; line-height:1.05;
-                     letter-spacing:-.01em; }
-        .kpi-unit { font-size:.95rem; font-weight:500; color:#6b7480; margin-left:.28rem; }
-        .kpi-sub { font-size:.82rem; font-weight:600; margin-top:.5rem; color:#9aa4b2; }
+        .kpi-value { font-size:2rem; font-weight:700; color:var(--text); line-height:1;
+                     letter-spacing:-.025em; }
+        .kpi-unit { font-size:.95rem; font-weight:500; color:var(--faint); margin-left:.3rem;
+                    letter-spacing:0; }
+        .kpi-sub { font-size:.8rem; font-weight:600; margin-top:.6rem; color:var(--muted); }
         .kpi-empty .kpi-value { color:#39424f; font-weight:600; }
 
         /* Status callout */
-        .status { border-radius:16px; padding:1rem 1.2rem; display:flex; gap:.85rem;
-                  align-items:flex-start; border:1px solid; margin:.1rem 0 .2rem; }
+        .status { border-radius:var(--radius); padding:1rem 1.25rem; display:flex; gap:.85rem;
+                  align-items:flex-start; border:1px solid; margin:.1rem 0 .2rem;
+                  box-shadow:var(--shadow); }
         .status-ic { font-size:1.15rem; line-height:1.4; }
-        .status-title { font-weight:700; font-size:.98rem; }
-        .status-text { font-size:.88rem; color:#c2cad4; margin-top:.12rem; line-height:1.4; }
-        .s-success { background:rgba(16,185,129,.10); border-color:rgba(16,185,129,.32); }
+        .status-title { font-weight:700; font-size:.97rem; letter-spacing:-.01em; }
+        .status-text { font-size:.88rem; color:#c2cad4; margin-top:.15rem; line-height:1.45; }
+        .s-success { background:rgba(16,185,129,.09); border-color:rgba(16,185,129,.30); }
         .s-success .status-title { color:#34d399; }
-        .s-warning { background:rgba(245,158,11,.10); border-color:rgba(245,158,11,.32); }
+        .s-warning { background:rgba(245,158,11,.09); border-color:rgba(245,158,11,.30); }
         .s-warning .status-title { color:#fbbf24; }
-        .s-danger  { background:rgba(239,68,68,.10);  border-color:rgba(239,68,68,.32); }
+        .s-danger  { background:rgba(239,68,68,.09);  border-color:rgba(239,68,68,.30); }
         .s-danger  .status-title { color:#f87171; }
-        .s-info    { background:rgba(96,165,250,.10); border-color:rgba(96,165,250,.30); }
+        .s-info    { background:rgba(96,165,250,.09); border-color:rgba(96,165,250,.28); }
         .s-info    .status-title { color:#60a5fa; }
-        .s-neutral { background:rgba(100,116,139,.10); border-color:rgba(100,116,139,.30); }
+        .s-neutral { background:rgba(100,116,139,.09); border-color:rgba(100,116,139,.28); }
         .s-neutral .status-title { color:#94a3b8; }
 
         /* Recovery card header */
-        .rec-top { display:flex; justify-content:space-between; align-items:baseline; }
-        .rec-label { font-size:.8rem; color:#9aa4b2; font-weight:600; }
-        .rec-value { font-size:1.45rem; font-weight:700; color:#e6edf3; }
-        .rec-value .u { font-size:.85rem; color:#6b7480; font-weight:500; margin-left:.15rem; }
-        .rec-trend { font-size:.78rem; font-weight:600; }
+        .rec-top { display:flex; justify-content:space-between; align-items:baseline;
+                   margin-bottom:.15rem; }
+        .rec-label { font-size:.78rem; color:var(--muted); font-weight:600; }
+        .rec-value { font-size:1.5rem; font-weight:700; color:var(--text); letter-spacing:-.02em; }
+        .rec-value .u { font-size:.82rem; color:var(--faint); font-weight:500; margin-left:.18rem; }
+        .rec-trend { font-size:.76rem; font-weight:600; }
 
         /* Empty state */
-        .empty { text-align:center; padding:2.6rem 1rem; color:#6b7480;
-                 border:1px dashed rgba(255,255,255,.10); border-radius:16px; background:rgba(255,255,255,.012); }
-        .empty-ic { font-size:1.9rem; opacity:.55; margin-bottom:.5rem; }
-        .empty-tx { font-size:.92rem; }
+        .empty { text-align:center; padding:2.6rem 1rem; color:var(--faint);
+                 border:1px dashed rgba(255,255,255,.10); border-radius:14px;
+                 background:rgba(255,255,255,.012); }
+        .empty-ic { font-size:1.9rem; opacity:.5; margin-bottom:.5rem; }
+        .empty-tx { font-size:.92rem; line-height:1.5; }
 
         /* Today strip */
-        .today { display:grid; align-items:stretch; }
-        .today-date { padding:.15rem 1.3rem .15rem .3rem; display:flex;
-                      flex-direction:column; justify-content:center; }
-        .today-date .d1 { font-size:.64rem; color:#10b981; text-transform:uppercase;
-                          letter-spacing:.12em; font-weight:700; }
-        .today-date .d2 { font-size:1.05rem; font-weight:700; color:#e6edf3;
-                          margin-top:.25rem; white-space:nowrap; }
-        .tstat { padding:.2rem .6rem; border-left:1px solid rgba(255,255,255,.07);
-                 display:flex; flex-direction:column; align-items:center;
-                 justify-content:center; text-align:center; gap:.35rem; }
-        .tstat-l { font-size:.63rem; color:#9aa4b2; text-transform:uppercase;
-                   letter-spacing:.07em; font-weight:600; }
-        .tstat-v { font-size:1.28rem; font-weight:700; color:#e6edf3; line-height:1;
-                   letter-spacing:-.01em; white-space:nowrap; }
-        .tstat-v .u { font-size:.72rem; color:#6b7480; font-weight:500; margin-left:.12rem; }
-        .tstat-v.muted { color:#4a5260; font-size:1.1rem; font-weight:700; }
+        .today-head { display:flex; align-items:baseline; gap:.6rem; margin-bottom:.9rem; }
+        .today-head .d1 { font-size:.64rem; color:var(--accent); text-transform:uppercase;
+                          letter-spacing:.14em; font-weight:700; }
+        .today-head .d2 { font-size:1.05rem; font-weight:700; color:var(--text);
+                          letter-spacing:-.01em; }
+        .today-grid { display:grid; gap:.6rem;
+                      grid-template-columns:repeat(auto-fit, minmax(94px, 1fr)); }
+        .tstat { padding:.7rem .5rem; text-align:center; box-shadow:none;
+                 display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+        .tstat-l { font-size:.62rem; color:var(--muted); text-transform:uppercase;
+                   letter-spacing:.06em; font-weight:600; }
+        .tstat-v { font-size:1.24rem; font-weight:700; color:var(--text); line-height:1;
+                   letter-spacing:-.02em; white-space:nowrap; }
+        .tstat-v .u { font-size:.7rem; color:var(--faint); font-weight:500; margin-left:.1rem; }
+        .tstat-v.muted { color:#414b59; font-size:1.05rem; font-weight:700; }
+
+        /* KPI grid (responsive: 4-up desktop, 2-up phone) */
+        .kpi-grid { display:grid; gap:.8rem;
+                    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
 
         /* Session log */
         .slog { display:flex; flex-direction:column; max-height:340px; overflow-y:auto; }
-        .slog-row { display:flex; align-items:center; gap:1rem; padding:.6rem .15rem;
-                    border-bottom:1px solid rgba(255,255,255,.05); }
+        .slog-row { display:flex; align-items:center; gap:1rem; padding:.65rem .15rem;
+                    border-bottom:1px solid var(--line-soft); }
         .slog-row:last-child { border-bottom:none; }
-        .slog-date { font-size:.85rem; color:#c2cad4; font-weight:600; width:130px;
-                     flex-shrink:0; }
-        .slog-date .dim { color:#6b7480; font-weight:500; }
+        .slog-date { font-size:.86rem; color:#c8cfd9; font-weight:600; width:130px; flex-shrink:0; }
+        .slog-date .dim { color:var(--faint); font-weight:500; }
         .slog-chips { display:flex; flex-wrap:wrap; gap:.45rem; }
         .tchip { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px;
-                 padding:.28rem .7rem; font-size:.8rem; font-weight:600; color:#e6edf3;
+                 padding:.3rem .72rem; font-size:.8rem; font-weight:600; color:var(--text);
                  background:rgba(255,255,255,.04); border:1px solid transparent; }
         .tchip .dot { width:8px; height:8px; border-radius:50%; }
 
-        /* Soften native bordered containers */
-        div[data-testid="stVerticalBlockBorderWrapper"] { border-radius:16px; }
+        /* Buttons */
+        .stButton button { border-radius:11px !important; font-weight:600 !important;
+                           transition:transform .05s ease, border-color .2s ease; }
+        .stButton button:active { transform:translateY(1px); }
+        .stButton button[kind="primary"] { box-shadow:0 4px 14px -4px rgba(16,185,129,.45); }
 
-        /* Primary button polish */
-        .stButton button[kind="primary"] { font-weight:600; border-radius:12px; }
+        /* Mobile */
+        @media (max-width: 640px) {
+            .block-container { padding-left:.85rem; padding-right:.85rem; padding-top:1.5rem; }
+            .app-title { font-size:1.5rem; }
+            .app-sub { font-size:.84rem; }
+            .today-grid { grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); }
+            .kpi-grid { grid-template-columns:repeat(2, 1fr); }
+            .kpi-value { font-size:1.75rem; }
+            .tstat-v { font-size:1.12rem; }
+            .slog-date { width:104px; font-size:.82rem; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -177,27 +214,25 @@ def hm(hours) -> str:
 
 
 def today_card(date_label: str, items: list[tuple]):
-    """A glanceable, evenly-distributed strip of today's stats.
-    items = [(label, value, unit), ...]; value None renders a muted dash."""
-    cells = [f'<div class="today-date"><div class="d1">Today</div>'
-             f'<div class="d2">{date_label}</div></div>']
+    """A glanceable, responsive grid of today's stats (reflows to 2-up on
+    mobile). items = [(label, value, unit), ...]; value None renders a muted dash."""
+    head = (f'<div class="today-head"><span class="d1">Today</span>'
+            f'<span class="d2">{date_label}</span></div>')
+    tiles = []
     for label, value, unit in items:
         if value is None:
             v = '<span class="tstat-v muted">—</span>'
         else:
             u = f'<span class="u">{unit}</span>' if unit else ""
             v = f'<span class="tstat-v">{value}{u}</span>'
-        cells.append(f'<div class="tstat"><div class="tstat-l">{label}</div>{v}</div>')
-    cols = f"max-content repeat({len(items)}, minmax(0, 1fr))"
-    st.markdown(
-        f'<div class="today" style="grid-template-columns:{cols};">{"".join(cells)}</div>',
-        unsafe_allow_html=True,
-    )
+        tiles.append(f'<div class="tstat"><div class="tstat-l">{label}</div>{v}</div>')
+    st.markdown(f'{head}<div class="today-grid">{"".join(tiles)}</div>',
+                unsafe_allow_html=True)
 
 
 def kpi(label: str, value: str, unit: str | None = None, sub: str | None = None,
-        sub_color: str | None = None, help: str | None = None, empty: bool = False):
-    """Render one KPI card. `value` is the big number; `empty` mutes it."""
+        sub_color: str | None = None, help: str | None = None, empty: bool = False) -> str:
+    """Return the HTML for one KPI card. `value` is the big number; `empty` mutes it."""
     unit_html = f'<span class="kpi-unit">{unit}</span>' if unit else ""
     hint = f'<span title="{help}" style="cursor:help;color:#5b6573;">ⓘ</span>' if help else ""
     sub_html = ""
@@ -205,16 +240,13 @@ def kpi(label: str, value: str, unit: str | None = None, sub: str | None = None,
         color = f"color:{sub_color};" if sub_color else ""
         sub_html = f'<div class="kpi-sub" style="{color}">{sub}</div>'
     cls = "kpi kpi-empty" if empty else "kpi"
-    st.markdown(
-        f"""
-        <div class="{cls}">
-          <div class="kpi-label">{label} {hint}</div>
-          <div class="kpi-value">{value}{unit_html}</div>
-          {sub_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    return (f'<div class="{cls}"><div class="kpi-label">{label} {hint}</div>'
+            f'<div class="kpi-value">{value}{unit_html}</div>{sub_html}</div>')
+
+
+def kpi_grid(cards: list[str]):
+    """Render KPI card HTML strings in a responsive grid (4-up desktop, 2-up phone)."""
+    st.markdown(f'<div class="kpi-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def status_banner(key: str, title: str, text: str):

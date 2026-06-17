@@ -278,46 +278,44 @@ head = metrics.headline(df, window_days=14)
 status = metrics.status_read(df, head)
 
 ui.section("This week at a glance")
-k1, k2, k3, k4 = st.columns(4)
+cards = []
 
-with k1:
-    if head.avg_weight is not None:
-        ui.kpi("7-day avg weight", f"{head.avg_weight:.1f}", unit="kg")
-    else:
-        ui.kpi("7-day avg weight", "—", empty=True, sub="log weight to populate")
+if head.avg_weight is not None:
+    cards.append(ui.kpi("7-day avg weight", f"{head.avg_weight:.1f}", unit="kg"))
+else:
+    cards.append(ui.kpi("7-day avg weight", "—", empty=True, sub="log weight to populate"))
 
-with k2:
-    if head.rate_kg_per_week is not None:
-        rate = head.rate_kg_per_week
-        col = ui.ACCENT if rate < 0 else (ui.RED if rate > 0 else ui.MUTED)
-        arrow = "▼" if rate < 0 else ("▲" if rate > 0 else "→")
-        ui.kpi("Weekly rate",
-               f'<span style="color:{col}">{arrow} {abs(rate):.2f}</span>',
-               unit="kg/wk",
-               sub=("losing" if rate < 0 else "gaining" if rate > 0 else "flat"),
-               sub_color=col)
-    else:
-        ui.kpi("Weekly rate", "—", empty=True, sub="needs a few weigh-ins")
+if head.rate_kg_per_week is not None:
+    rate = head.rate_kg_per_week
+    rcol = ui.ACCENT if rate < 0 else (ui.RED if rate > 0 else ui.MUTED)
+    arrow = "▼" if rate < 0 else ("▲" if rate > 0 else "→")
+    cards.append(ui.kpi("Weekly rate",
+                        f'<span style="color:{rcol}">{arrow} {abs(rate):.2f}</span>',
+                        unit="kg/wk",
+                        sub=("losing" if rate < 0 else "gaining" if rate > 0 else "flat"),
+                        sub_color=rcol))
+else:
+    cards.append(ui.kpi("Weekly rate", "—", empty=True, sub="needs a few weigh-ins"))
 
-with k3:
-    if head.avg_expenditure is not None:
-        ui.kpi("Maintenance est.", f"{head.avg_expenditure:,.0f}", unit="kcal",
-               sub="live, from Garmin", sub_color=ui.MUTED,
-               help="Average daily Garmin expenditure over the window. "
-                    "An estimate, not ground truth.")
-    else:
-        ui.kpi("Maintenance est.", "—", empty=True)
+if head.avg_expenditure is not None:
+    cards.append(ui.kpi("Maintenance est.", f"{head.avg_expenditure:,.0f}", unit="kcal",
+                        sub="live, from Garmin", sub_color=ui.MUTED,
+                        help="Average daily Garmin expenditure over the window. "
+                             "An estimate, not ground truth."))
+else:
+    cards.append(ui.kpi("Maintenance est.", "—", empty=True))
 
-with k4:
-    if head.implied_deficit is not None:
-        d = head.implied_deficit
-        label = "daily deficit" if d >= 0 else "daily surplus"
-        col = ui.ACCENT if d >= 0 else ui.RED
-        ui.kpi("Implied deficit", f"{abs(d):,.0f}", unit="kcal",
-               sub=f"{label} · from trend", sub_color=col,
-               help="Energy balance implied by the weight trend (≈7700 kcal/kg).")
-    else:
-        ui.kpi("Implied deficit", "—", empty=True, sub="needs a trend")
+if head.implied_deficit is not None:
+    d = head.implied_deficit
+    dlabel = "daily deficit" if d >= 0 else "daily surplus"
+    dcol = ui.ACCENT if d >= 0 else ui.RED
+    cards.append(ui.kpi("Implied deficit", f"{abs(d):,.0f}", unit="kcal",
+                        sub=f"{dlabel} · from trend", sub_color=dcol,
+                        help="Energy balance implied by the weight trend (≈7700 kcal/kg)."))
+else:
+    cards.append(ui.kpi("Implied deficit", "—", empty=True, sub="needs a trend"))
+
+ui.kpi_grid(cards)
 
 st.write("")
 ui.status_banner(status.key, status.label, status.nudge)
