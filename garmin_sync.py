@@ -29,7 +29,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from config import BACKFILL_DAYS, TOKEN_STORE
+from config import BACKFILL_DAYS, REFRESH_DAYS, TOKEN_STORE
 import db
 
 load_dotenv()
@@ -267,30 +267,35 @@ def _as_int(value):
 # --- Sync orchestration --------------------------------------------------
 
 def sync(client, full_backfill: bool = False, progress=None) -> int:
-    """Fetch and store any missing days.
+    """Fetch and store recent/missing days.
 
-    On first run (or full_backfill=True) covers the last BACKFILL_DAYS. On
-    later runs only fills dates we don't already have, up to today. Today is
-    always re-fetched since its numbers are still accumulating.
+    On first run (or full_backfill=True) covers the last BACKFILL_DAYS.
+    Otherwise it always re-fetches the last REFRESH_DAYS (so partial values
+    captured earlier in the day — or a day that was only synced in the morning
+    — get corrected to their final totals) plus any older gap days.
 
     Returns the number of days fetched. `progress` is an optional callback
     (fraction_0_to_1, label) for a UI progress bar.
     """
     today = date.today()
     existing = db.get_existing_garmin_dates()
+    refresh_cutoff = today - timedelta(days=REFRESH_DAYS)
 
     if full_backfill or not existing:
         start = today - timedelta(days=BACKFILL_DAYS)
     else:
         latest = db.latest_garmin_date()
-        start = date.fromisoformat(latest) if latest else today - timedelta(days=BACKFILL_DAYS)
+        gap_start = date.fromisoformat(latest) if latest else today - timedelta(days=BACKFILL_DAYS)
+        # Cover the gap since the last pull AND force a refresh of recent days.
+        start = min(gap_start, refresh_cutoff)
 
     days = []
     d = start
     while d <= today:
         iso = d.isoformat()
-        # Re-fetch today (still accumulating) and any gap days.
-        if d == today or iso not in existing:
+        # Re-fetch anything in the rolling refresh window (still accumulating /
+        # may have been only partially captured) plus any older gap days.
+        if d >= refresh_cutoff or iso not in existing:
             days.append(iso)
         d += timedelta(days=1)
 

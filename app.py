@@ -42,12 +42,12 @@ if "db_inited" not in st.session_state:
 # means re-querying Supabase each time (the lag you saw). Cache the reads and
 # clear the cache only after a write (see _refresh).
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def load_data():
     return metrics.add_weight_trend(db.load_dataframe())
 
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def load_workouts():
     return db.get_workouts()
 

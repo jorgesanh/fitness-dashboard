@@ -337,9 +337,23 @@ def _base_theme(chart, y_grid=True):
 
 
 def weight_chart(df: pd.DataFrame):
-    """Daily weigh-ins (faint dots) + 7-day moving-average line with area fill."""
+    """Daily weigh-ins (faint dots) + 7-day moving-average line with area fill.
+
+    The x-axis fits the actual weigh-in dates (with a little padding) rather than
+    the whole selected range, so a couple of early weigh-ins don't float in a
+    huge empty chart."""
     data = df[["date", "weight_kg", "weight_ma7"]].copy()
-    x = alt.X("date:T", title=None, axis=alt.Axis(format="%a %b %d", tickCount=6))
+
+    weighed = data.dropna(subset=["weight_kg"])
+    if not weighed.empty:
+        pad = pd.Timedelta(days=1)
+        dmin, dmax = weighed["date"].min() - pad, weighed["date"].max() + pad
+        xscale = alt.Scale(domain=[dmin, dmax])
+    else:
+        xscale = alt.Scale()
+    n_pts = weighed["date"].nunique()
+    x = alt.X("date:T", title=None, scale=xscale,
+              axis=alt.Axis(format="%a %b %d", tickCount=min(max(n_pts, 2), 6)))
 
     area = (
         alt.Chart(data.dropna(subset=["weight_ma7"]))

@@ -23,6 +23,9 @@ KCAL_PER_KG = 7700
 
 # --- Sync ----------------------------------------------------------------
 BACKFILL_DAYS = 90  # how far back to pull on first run
+# Each sync re-fetches this many recent days so partial daily totals (e.g. a
+# day synced only in the morning) get corrected to their final values.
+REFRESH_DAYS = 3
 
 # --- Fat-loss targets (kg lost per week) ---------------------------------
 TARGET_RATE_LOW = 0.4
