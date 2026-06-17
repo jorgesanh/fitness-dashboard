@@ -254,22 +254,28 @@ _bb = _today_val("body_battery_high")
 _rhr = _today_val("resting_hr")
 _w_today = _today_val("weight_kg")
 
-with st.container(border=True):
-    _t = date.today()
-    ui.today_card(
-        f"{_t:%a · %b} {_t.day}",
-        [
-            ("Weight", f"{_w_today:.1f}" if _w_today is not None else
-                       (f"{last_weight:.1f}" if last_weight is not None else None),
-             "kg"),
-            ("Sleep", ui.hm(_sleep) if _sleep is not None else None, ""),
-            ("Steps", f"{_steps:,.0f}" if _steps is not None else None, ""),
-            ("Burned", f"{_cals:,.0f}" if _cals is not None else None, "kcal"),
-            ("Resting HR", f"{_rhr:.0f}" if _rhr is not None else None, "bpm"),
-            ("Body Battery", f"{_bb:.0f}" if _bb is not None else None, "peak"),
-            ("Sessions", sessions_str if sessions_str else None, ""),
-        ],
-    )
+_t = date.today()
+_w_show = (f"{_w_today:.1f}" if _w_today is not None
+           else (f"{last_weight:.1f}" if last_weight is not None else None))
+ui.summary_cards(
+    f"{_t:%a, %b} {_t.day}",
+    [
+        {"icon": "weight", "name": "Weight", "value": _w_show, "unit": "kg",
+         "sub": None if _w_today is not None else ("last logged" if _w_show else None)},
+        {"icon": "sleep", "name": "Sleep",
+         "value": ui.hm(_sleep) if _sleep is not None else None, "unit": "", "sub": "last night"},
+        {"icon": "steps", "name": "Steps",
+         "value": f"{_steps:,.0f}" if _steps is not None else None, "unit": "", "sub": "today"},
+        {"icon": "calories", "name": "Energy burned",
+         "value": f"{_cals:,.0f}" if _cals is not None else None, "unit": "kcal", "sub": "today"},
+        {"icon": "heart", "name": "Resting HR",
+         "value": f"{_rhr:.0f}" if _rhr is not None else None, "unit": "bpm", "sub": "today"},
+        {"icon": "battery", "name": "Body Battery",
+         "value": f"{_bb:.0f}" if _bb is not None else None, "unit": "peak", "sub": "today"},
+        {"icon": "sessions", "name": "Training",
+         "value": sessions_str if sessions_str else None, "unit": "", "sub": "today"},
+    ],
+)
 
 
 # --- Headline KPIs -------------------------------------------------------
@@ -450,17 +456,18 @@ def _recovery_card(label, col, color, unit, *, fmt="{:.0f}", value_fmt=None,
             st.caption("No data in range yet.")
 
 
+MC = ui.METRIC_COLORS
 r1, r2, r3 = st.columns(3)
 with r1:
-    _recovery_card("Resting HR", "resting_hr", ui.AMBER, "bpm",
+    _recovery_card("Resting HR", "resting_hr", MC["heart"], "bpm",
                    slope=rec.rhr_slope, good_down=True, deadband=0.1)
 with r2:
-    _recovery_card("Sleep", "sleep_seconds", ui.INDIGO, "", value_fmt=ui.hm,
+    _recovery_card("Sleep", "sleep_seconds", MC["sleep"], "", value_fmt=ui.hm,
                    slope=rec.sleep_slope, good_down=False, deadband=0.1,
                    transform=lambda v: v / 3600.0,
                    spark_transform=lambda s: s / 3600.0, spark_hm=True)
 with r3:
-    _recovery_card("Body Battery", "body_battery_high", ui.TEAL, "peak",
+    _recovery_card("Body Battery", "body_battery_high", MC["battery"], "peak",
                    slope=rec.bb_slope, good_down=False, deadband=0.5)
 
 
@@ -473,7 +480,7 @@ with a1:
         val = _latest(wdf, "total_calories")
         ui.recovery_header("Calories burned", f"{val:,.0f}" if val is not None else "—",
                            unit="kcal" if val is not None else "")
-        chart = ui.spark(wdf, "total_calories", ui.AMBER, fmt=",.0f",
+        chart = ui.spark(wdf, "total_calories", MC["calories"], fmt=",.0f",
                          label="Calories (kcal)")
         if chart is not None:
             st.altair_chart(chart, width="stretch")
@@ -483,7 +490,7 @@ with a2:
     with st.container(border=True):
         val = _latest(wdf, "steps")
         ui.recovery_header("Steps", f"{val:,.0f}" if val is not None else "—")
-        chart = ui.spark(wdf, "steps", ui.BLUE, fmt=",.0f", label="Steps")
+        chart = ui.spark(wdf, "steps", MC["steps"], fmt=",.0f", label="Steps")
         if chart is not None:
             st.altair_chart(chart, width="stretch")
         else:

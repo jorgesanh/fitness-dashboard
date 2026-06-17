@@ -16,13 +16,14 @@ TEXT = "#eef1f5"
 MUTED = "#98a2b1"
 FAINT = "#646e7d"
 
-ACCENT = "#10b981"   # emerald
-BLUE = "#60a5fa"
-INDIGO = "#818cf8"
-TEAL = "#2dd4bf"
-AMBER = "#fbbf24"
-RED = "#f87171"
-SLATE = "#64748b"
+# Apple system colours (dark variants).
+ACCENT = "#30d158"   # green
+BLUE = "#0a84ff"
+INDIGO = "#5e5ce6"
+TEAL = "#64d2ff"
+AMBER = "#ff9f0a"
+RED = "#ff453a"
+SLATE = "#8e8e93"
 
 # Status key -> (css class, icon, accent colour)
 STATUS_STYLE = {
@@ -42,142 +43,134 @@ def inject_css():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         :root {
-            --bg:#0a0c10; --surface:#13171e; --surface-2:#171c24;
-            --line:rgba(255,255,255,.07); --line-soft:rgba(255,255,255,.05);
-            --text:#eef1f5; --muted:#98a2b1; --faint:#646e7d; --accent:#10b981;
-            --shadow:0 1px 2px rgba(0,0,0,.35), 0 6px 20px -8px rgba(0,0,0,.55);
-            --radius:18px;
+            --bg:#000000; --surface:#1c1c1e; --surface-2:#2c2c2e;
+            --line:rgba(255,255,255,.06); --sep:rgba(84,84,88,.45);
+            --text:#f5f5f7; --muted:rgba(235,235,245,.62); --faint:rgba(235,235,245,.32);
+            --accent:#30d158; --radius:20px;
         }
 
         html, body, .stApp, [data-testid="stAppViewContainer"],
         [data-testid="stSidebar"], button, input, textarea, select {
-            font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+            font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+                        'Inter', 'Segoe UI', sans-serif !important;
             -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
         }
-        .stApp { background:
-            radial-gradient(1200px 600px at 50% -200px, rgba(16,185,129,.06), transparent 70%),
-            var(--bg); }
+        .stApp { background:var(--bg); }
 
-        .block-container { padding-top:2.4rem; padding-bottom:5rem; max-width:1180px; }
+        .block-container { padding-top:2.2rem; padding-bottom:5rem; max-width:1100px; }
         [data-testid="stHeader"] { background:transparent; }
         #MainMenu, footer { visibility:hidden; }
 
-        /* Hero header */
+        /* Large navigation-style header */
         .app-head { display:flex; align-items:flex-end; justify-content:space-between;
-                    gap:1rem; margin-bottom:1.1rem; flex-wrap:wrap; }
-        .app-title { font-size:1.95rem; font-weight:800; letter-spacing:-.03em; margin:0;
-                     line-height:1.08; color:var(--text); }
-        .app-sub { color:var(--muted); font-size:.9rem; margin-top:.3rem; font-weight:450; }
+                    gap:1rem; margin-bottom:1.2rem; flex-wrap:wrap; }
+        .app-title { font-size:2.05rem; font-weight:700; letter-spacing:-.03em; margin:0;
+                     line-height:1.05; color:var(--text); }
+        .app-sub { color:var(--muted); font-size:.92rem; margin-top:.35rem; font-weight:400; }
         .app-meta { color:var(--faint); font-size:.82rem; text-align:right; }
 
-        /* Section label */
-        .section-title { font-size:.74rem; font-weight:600; letter-spacing:.11em;
-            text-transform:uppercase; color:var(--faint); margin:2.1rem 0 .8rem; }
+        /* Section header (Apple "title3": bold, sentence case) */
+        .section-title { font-size:1.16rem; font-weight:700; letter-spacing:-.02em;
+            color:var(--text); margin:2.1rem 0 .85rem; }
 
-        /* Card surface shared by KPI / today tiles / native containers */
-        .kpi, .tstat,
+        /* Flat grouped cards — no border, no heavy shadow (iOS look) */
+        .kpi, .sum-card,
         div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:linear-gradient(180deg, var(--surface-2), var(--surface));
-            border:1px solid var(--line) !important; border-radius:var(--radius) !important;
-            box-shadow:var(--shadow);
+            background:var(--surface) !important; border:none !important;
+            border-radius:var(--radius) !important; box-shadow:none !important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"] { padding:.15rem; }
+        div[data-testid="stVerticalBlockBorderWrapper"] { padding:.2rem; }
 
-        /* KPI cards */
-        .kpi { padding:1.15rem 1.25rem; height:100%; transition:border-color .2s ease; }
-        .kpi:hover { border-color:rgba(255,255,255,.13) !important; }
-        .kpi-label { font-size:.76rem; color:var(--muted); font-weight:500; margin-bottom:.55rem;
+        /* KPI / trend cards */
+        .kpi { padding:1.15rem 1.25rem; height:100%; }
+        .kpi-label { font-size:.82rem; color:var(--muted); font-weight:500; margin-bottom:.55rem;
                      display:flex; align-items:center; gap:.3rem; }
-        .kpi-value { font-size:2rem; font-weight:700; color:var(--text); line-height:1;
-                     letter-spacing:-.025em; }
+        .kpi-value { font-size:2.05rem; font-weight:700; color:var(--text); line-height:1;
+                     letter-spacing:-.03em; }
         .kpi-unit { font-size:.95rem; font-weight:500; color:var(--faint); margin-left:.3rem;
                     letter-spacing:0; }
-        .kpi-sub { font-size:.8rem; font-weight:600; margin-top:.6rem; color:var(--muted); }
-        .kpi-empty .kpi-value { color:#39424f; font-weight:600; }
+        .kpi-sub { font-size:.82rem; font-weight:500; margin-top:.6rem; color:var(--muted); }
+        .kpi-empty .kpi-value { color:#48484a; font-weight:600; }
 
         /* Status callout */
-        .status { border-radius:var(--radius); padding:1rem 1.25rem; display:flex; gap:.85rem;
-                  align-items:flex-start; border:1px solid; margin:.1rem 0 .2rem;
-                  box-shadow:var(--shadow); }
-        .status-ic { font-size:1.15rem; line-height:1.4; }
-        .status-title { font-weight:700; font-size:.97rem; letter-spacing:-.01em; }
-        .status-text { font-size:.88rem; color:#c2cad4; margin-top:.15rem; line-height:1.45; }
-        .s-success { background:rgba(16,185,129,.09); border-color:rgba(16,185,129,.30); }
-        .s-success .status-title { color:#34d399; }
-        .s-warning { background:rgba(245,158,11,.09); border-color:rgba(245,158,11,.30); }
-        .s-warning .status-title { color:#fbbf24; }
-        .s-danger  { background:rgba(239,68,68,.09);  border-color:rgba(239,68,68,.30); }
-        .s-danger  .status-title { color:#f87171; }
-        .s-info    { background:rgba(96,165,250,.09); border-color:rgba(96,165,250,.28); }
-        .s-info    .status-title { color:#60a5fa; }
-        .s-neutral { background:rgba(100,116,139,.09); border-color:rgba(100,116,139,.28); }
-        .s-neutral .status-title { color:#94a3b8; }
+        .status { border-radius:var(--radius); padding:1rem 1.2rem; display:flex; gap:.8rem;
+                  align-items:flex-start; background:var(--surface); }
+        .status-ic { font-size:1.1rem; line-height:1.45; }
+        .status-title { font-weight:600; font-size:.97rem; letter-spacing:-.01em; }
+        .status-text { font-size:.88rem; color:var(--muted); margin-top:.15rem; line-height:1.45; }
+        .s-success .status-title { color:#30d158; }
+        .s-warning .status-title { color:#ffd60a; }
+        .s-danger  .status-title { color:#ff453a; }
+        .s-info    .status-title { color:#0a84ff; }
+        .s-neutral .status-title { color:#98a2b1; }
+        .status::before { content:""; width:3px; align-self:stretch; border-radius:3px;
+                          background:currentColor; flex-shrink:0; }
+        .s-success { color:#30d158; } .s-warning { color:#ffd60a; }
+        .s-danger { color:#ff453a; } .s-info { color:#0a84ff; } .s-neutral { color:#98a2b1; }
+        .status > .status-ic, .status > div { color:var(--text); }
 
         /* Recovery card header */
         .rec-top { display:flex; justify-content:space-between; align-items:baseline;
                    margin-bottom:.15rem; }
-        .rec-label { font-size:.78rem; color:var(--muted); font-weight:600; }
-        .rec-value { font-size:1.5rem; font-weight:700; color:var(--text); letter-spacing:-.02em; }
+        .rec-label { font-size:.84rem; color:var(--muted); font-weight:500; }
+        .rec-value { font-size:1.55rem; font-weight:700; color:var(--text); letter-spacing:-.025em; }
         .rec-value .u { font-size:.82rem; color:var(--faint); font-weight:500; margin-left:.18rem; }
-        .rec-trend { font-size:.76rem; font-weight:600; }
+        .rec-trend { font-size:.78rem; font-weight:600; }
 
         /* Empty state */
-        .empty { text-align:center; padding:2.6rem 1rem; color:var(--faint);
-                 border:1px dashed rgba(255,255,255,.10); border-radius:14px;
-                 background:rgba(255,255,255,.012); }
+        .empty { text-align:center; padding:2.4rem 1rem; color:var(--faint); }
         .empty-ic { font-size:1.9rem; opacity:.5; margin-bottom:.5rem; }
         .empty-tx { font-size:.92rem; line-height:1.5; }
 
-        /* Today strip */
-        .today-head { display:flex; align-items:baseline; gap:.6rem; margin-bottom:.9rem; }
-        .today-head .d1 { font-size:.64rem; color:var(--accent); text-transform:uppercase;
-                          letter-spacing:.14em; font-weight:700; }
-        .today-head .d2 { font-size:1.05rem; font-weight:700; color:var(--text);
-                          letter-spacing:-.01em; }
-        .today-grid { display:grid; gap:.6rem;
-                      grid-template-columns:repeat(auto-fit, minmax(94px, 1fr)); }
-        .tstat { padding:.7rem .5rem; text-align:center; box-shadow:none;
-                 display:flex; flex-direction:column; align-items:center; gap:.4rem; }
-        .tstat-l { font-size:.62rem; color:var(--muted); text-transform:uppercase;
-                   letter-spacing:.06em; font-weight:600; }
-        .tstat-v { font-size:1.24rem; font-weight:700; color:var(--text); line-height:1;
-                   letter-spacing:-.02em; white-space:nowrap; }
-        .tstat-v .u { font-size:.7rem; color:var(--faint); font-weight:500; margin-left:.1rem; }
-        .tstat-v.muted { color:#414b59; font-size:1.05rem; font-weight:700; }
+        /* Summary (Apple Health "favorites") cards */
+        .sum-head { display:flex; align-items:baseline; gap:.6rem; margin-bottom:.95rem; }
+        .sum-head .d1 { font-size:.66rem; color:var(--accent); text-transform:uppercase;
+                        letter-spacing:.12em; font-weight:700; }
+        .sum-head .d2 { font-size:1.1rem; font-weight:700; color:var(--text); letter-spacing:-.02em; }
+        .sum-grid { display:grid; gap:.7rem;
+                    grid-template-columns:repeat(auto-fit, minmax(158px, 1fr)); }
+        .sum-card { padding:1.05rem 1.1rem; display:flex; flex-direction:column; }
+        .sum-top { display:flex; align-items:center; gap:.45rem; margin-bottom:.75rem; }
+        .sum-ic { width:25px; height:25px; border-radius:7px; display:inline-flex;
+                  align-items:center; justify-content:center; flex-shrink:0; }
+        .sum-name { font-size:.85rem; font-weight:600; letter-spacing:-.01em; }
+        .sum-val { font-size:1.6rem; font-weight:700; color:var(--text); line-height:1;
+                   letter-spacing:-.03em; }
+        .sum-val .u { font-size:.8rem; color:var(--faint); font-weight:500; margin-left:.14rem; }
+        .sum-val.muted { color:#48484a; font-size:1.05rem; font-weight:600; }
+        .sum-sub { font-size:.76rem; color:var(--faint); margin-top:.5rem; font-weight:500; }
 
-        /* KPI grid (responsive: 4-up desktop, 2-up phone) */
-        .kpi-grid { display:grid; gap:.8rem;
-                    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
+        /* KPI grid (responsive) */
+        .kpi-grid { display:grid; gap:.7rem;
+                    grid-template-columns:repeat(auto-fit, minmax(158px, 1fr)); }
 
         /* Session log */
-        .slog { display:flex; flex-direction:column; max-height:340px; overflow-y:auto; }
-        .slog-row { display:flex; align-items:center; gap:1rem; padding:.65rem .15rem;
-                    border-bottom:1px solid var(--line-soft); }
+        .slog { display:flex; flex-direction:column; max-height:360px; overflow-y:auto; }
+        .slog-row { display:flex; align-items:center; gap:1rem; padding:.7rem .15rem;
+                    border-bottom:1px solid var(--line); }
         .slog-row:last-child { border-bottom:none; }
-        .slog-date { font-size:.86rem; color:#c8cfd9; font-weight:600; width:130px; flex-shrink:0; }
-        .slog-date .dim { color:var(--faint); font-weight:500; }
+        .slog-date { font-size:.88rem; color:var(--text); font-weight:500; width:130px; flex-shrink:0; }
+        .slog-date .dim { color:var(--faint); font-weight:400; }
         .slog-chips { display:flex; flex-wrap:wrap; gap:.45rem; }
         .tchip { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px;
-                 padding:.3rem .72rem; font-size:.8rem; font-weight:600; color:var(--text);
-                 background:rgba(255,255,255,.04); border:1px solid transparent; }
+                 padding:.32rem .75rem; font-size:.82rem; font-weight:600; color:var(--text);
+                 background:var(--surface-2); }
         .tchip .dot { width:8px; height:8px; border-radius:50%; }
 
-        /* Buttons */
-        .stButton button { border-radius:11px !important; font-weight:600 !important;
-                           transition:transform .05s ease, border-color .2s ease; }
-        .stButton button:active { transform:translateY(1px); }
-        .stButton button[kind="primary"] { box-shadow:0 4px 14px -4px rgba(16,185,129,.45); }
+        /* Buttons — pill, Apple-tinted */
+        .stButton button { border-radius:12px !important; font-weight:600 !important;
+                           transition:transform .06s ease, opacity .2s ease; }
+        .stButton button:active { transform:scale(.985); }
 
         /* Mobile */
         @media (max-width: 640px) {
-            .block-container { padding-left:.85rem; padding-right:.85rem; padding-top:1.5rem; }
-            .app-title { font-size:1.5rem; }
-            .app-sub { font-size:.84rem; }
-            .today-grid { grid-template-columns:repeat(auto-fit, minmax(82px, 1fr)); }
-            .kpi-grid { grid-template-columns:repeat(2, 1fr); }
-            .kpi-value { font-size:1.75rem; }
-            .tstat-v { font-size:1.12rem; }
-            .slog-date { width:104px; font-size:.82rem; }
+            .block-container { padding-left:.9rem; padding-right:.9rem; padding-top:1.4rem; }
+            .app-title { font-size:1.7rem; }
+            .app-sub { font-size:.85rem; }
+            .sum-grid, .kpi-grid { grid-template-columns:repeat(2, 1fr); gap:.6rem; }
+            .kpi-value { font-size:1.8rem; }
+            .sum-val { font-size:1.42rem; }
+            .slog-date { width:100px; font-size:.83rem; }
         }
         </style>
         """,
@@ -213,20 +206,57 @@ def hm(hours) -> str:
     return f"{h}h {m}m" if m else f"{h}h"
 
 
-def today_card(date_label: str, items: list[tuple]):
-    """A glanceable, responsive grid of today's stats (reflows to 2-up on
-    mobile). items = [(label, value, unit), ...]; value None renders a muted dash."""
-    head = (f'<div class="today-head"><span class="d1">Today</span>'
+# Apple-system metric colours.
+METRIC_COLORS = {
+    "weight": "#5e5ce6",   # indigo
+    "sleep": "#64d2ff",    # cyan
+    "steps": "#ff9f0a",    # orange
+    "calories": "#ff453a", # red
+    "heart": "#ff375f",    # pink
+    "battery": "#30d158",  # green
+    "sessions": "#0a84ff", # blue
+}
+
+# Lucide-style stroke icons (clean, SF-Symbol-adjacent).
+_ICONS = {
+    "weight": '<circle cx="12" cy="5" r="3"/><path d="M6.5 8a2 2 0 0 0-1.9 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.9-2.54L19.4 9.5A2 2 0 0 0 17.5 8Z"/>',
+    "sleep": '<path d="M12 3a6.4 6.4 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    "steps": '<ellipse cx="8" cy="8.5" rx="2.4" ry="4"/><ellipse cx="15.5" cy="14.5" rx="2.4" ry="4"/>',
+    "calories": '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+    "heart": '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>',
+    "battery": '<rect x="2" y="7" width="16" height="10" rx="2.5"/><line x1="22" y1="11" x2="22" y2="13"/>',
+    "sessions": '<path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>',
+}
+
+
+def _icon(key: str, color: str, size: int = 16) -> str:
+    inner = _ICONS.get(key, "")
+    return (f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
+            f'stroke="{color}" stroke-width="2.1" stroke-linecap="round" '
+            f'stroke-linejoin="round">{inner}</svg>')
+
+
+def summary_cards(date_label: str, items: list[dict]):
+    """Apple-Health-style favourites grid. Each item:
+    {icon, name, value, unit, sub}; value None -> 'No Data'."""
+    head = (f'<div class="sum-head"><span class="d1">Today</span>'
             f'<span class="d2">{date_label}</span></div>')
-    tiles = []
-    for label, value, unit in items:
-        if value is None:
-            v = '<span class="tstat-v muted">—</span>'
+    cards = []
+    for it in items:
+        color = METRIC_COLORS.get(it["icon"], "#8e8e93")
+        if it.get("value") is None:
+            val = '<span class="sum-val muted">No Data</span>'
         else:
-            u = f'<span class="u">{unit}</span>' if unit else ""
-            v = f'<span class="tstat-v">{value}{u}</span>'
-        tiles.append(f'<div class="tstat"><div class="tstat-l">{label}</div>{v}</div>')
-    st.markdown(f'{head}<div class="today-grid">{"".join(tiles)}</div>',
+            u = f'<span class="u">{it["unit"]}</span>' if it.get("unit") else ""
+            val = f'<span class="sum-val">{it["value"]}{u}</span>'
+        sub = f'<div class="sum-sub">{it["sub"]}</div>' if it.get("sub") else ""
+        cards.append(
+            f'<div class="sum-card"><div class="sum-top">'
+            f'<span class="sum-ic" style="background:{color}26;">{_icon(it["icon"], color)}</span>'
+            f'<span class="sum-name" style="color:{color};">{it["name"]}</span></div>'
+            f'{val}{sub}</div>'
+        )
+    st.markdown(f'{head}<div class="sum-grid">{"".join(cards)}</div>',
                 unsafe_allow_html=True)
 
 
