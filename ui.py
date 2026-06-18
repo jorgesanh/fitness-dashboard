@@ -337,52 +337,46 @@ def _base_theme(chart, y_grid=True):
 
 
 def weight_chart(df: pd.DataFrame):
-    """Daily weigh-ins (faint dots) + 7-day moving-average line with area fill.
+    """Daily weigh-ins (dots) + 7-day moving-average line.
 
-    The x-axis fits the actual weigh-in dates (with a little padding) rather than
-    the whole selected range, so a couple of early weigh-ins don't float in a
-    huge empty chart."""
+    Both axes fit tightly to the actual weigh-ins — the x-axis to the weigh-in
+    date span (padded), the y-axis to the weight range (padded) — so a few
+    weigh-ins read clearly instead of floating in a huge 0–90 chart."""
     data = df[["date", "weight_kg", "weight_ma7"]].copy()
-
     weighed = data.dropna(subset=["weight_kg"])
-    if not weighed.empty:
-        pad = pd.Timedelta(days=1)
-        dmin, dmax = weighed["date"].min() - pad, weighed["date"].max() + pad
-        xscale = alt.Scale(domain=[dmin, dmax])
-    else:
-        xscale = alt.Scale()
-    n_pts = weighed["date"].nunique()
-    x = alt.X("date:T", title=None, scale=xscale,
-              axis=alt.Axis(format="%a %b %d", tickCount=min(max(n_pts, 2), 6)))
+    if weighed.empty:
+        return None
 
-    area = (
-        alt.Chart(data.dropna(subset=["weight_ma7"]))
-        .mark_area(
-            line=False,
-            color=alt.Gradient(
-                gradient="linear",
-                stops=[alt.GradientStop(color="rgba(16,185,129,0)", offset=0),
-                       alt.GradientStop(color="rgba(16,185,129,0.22)", offset=1)],
-                x1=1, x2=1, y1=1, y2=0,
-            ),
-        )
-        .encode(x=x, y=alt.Y("weight_ma7:Q", title="kg", scale=alt.Scale(zero=False)))
-    )
-    points = (
-        alt.Chart(data.dropna(subset=["weight_kg"]))
-        .mark_circle(size=34, opacity=0.35, color=SLATE)
-        .encode(x=x, y=alt.Y("weight_kg:Q", scale=alt.Scale(zero=False)))
-    )
+    # x-domain: weigh-in span + 1 day padding (string dates so Vega applies it).
+    pad = pd.Timedelta(days=1)
+    dmin = (weighed["date"].min() - pad).strftime("%Y-%m-%d")
+    dmax = (weighed["date"].max() + pad).strftime("%Y-%m-%d")
+
+    # y-domain: tight around the weight values (+ MA), with sensible padding.
+    vals = pd.concat([weighed["weight_kg"], data["weight_ma7"].dropna()])
+    lo, hi = float(vals.min()), float(vals.max())
+    ypad = max(0.6, (hi - lo) * 0.5)
+    ydom = [lo - ypad, hi + ypad]
+
+    n_pts = weighed["date"].nunique()
+    x = alt.X("date:T", title=None, scale=alt.Scale(domain=[dmin, dmax]),
+              axis=alt.Axis(format="%a %b %d", tickCount=min(max(n_pts, 2), 5)))
+    y_dots = alt.Y("weight_kg:Q", title="kg", scale=alt.Scale(domain=ydom))
+    y_ma = alt.Y("weight_ma7:Q", title="kg", scale=alt.Scale(domain=ydom))
+
     line = (
         alt.Chart(data.dropna(subset=["weight_ma7"]))
-        .mark_line(strokeWidth=2.5, color=ACCENT)
-        .encode(x=x, y=alt.Y("weight_ma7:Q", scale=alt.Scale(zero=False)))
+        .mark_line(strokeWidth=2.5, color=ACCENT, point=False)
+        .encode(x=x, y=y_ma)
     )
-    # Full-height hover rule that snaps to the nearest day (big hit target).
+    points = (
+        alt.Chart(weighed).mark_circle(size=70, opacity=0.7, color=SLATE)
+        .encode(x=x, y=y_dots)
+    )
     nearest = alt.selection_point(fields=["date"], nearest=True, on="pointerover",
                                   empty=False, clear="pointerout")
     rule = (
-        alt.Chart(data).mark_rule(color="rgba(255,255,255,0.28)", strokeWidth=1)
+        alt.Chart(weighed).mark_rule(color="rgba(255,255,255,0.28)", strokeWidth=1)
         .encode(
             x=x,
             opacity=alt.condition(nearest, alt.value(1), alt.value(0)),
@@ -392,7 +386,7 @@ def weight_chart(df: pd.DataFrame):
         )
         .add_params(nearest)
     )
-    chart = (area + line + points + rule).properties(height=300)
+    chart = (line + points + rule).properties(height=280)
     return _base_theme(chart)
 
 
