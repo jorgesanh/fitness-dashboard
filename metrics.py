@@ -19,6 +19,12 @@ from config import (
     TARGET_RATE_LOW,
 )
 
+# A weekly rate of weight change is only meaningful once there are enough
+# weigh-ins over enough days — otherwise day-to-day water/food noise (e.g. a
+# 0.5 kg jump overnight) gets extrapolated into a nonsense "kg/week".
+MIN_RATE_WEIGHINS = 6
+MIN_RATE_SPAN_DAYS = 10
+
 
 def add_weight_trend(df: pd.DataFrame) -> pd.DataFrame:
     """Add a 7-day centered-ish moving average of weight.
@@ -64,9 +70,17 @@ def headline(df: pd.DataFrame, window_days: int = 14) -> Headline:
     ma = window["weight_ma7"].dropna() if "weight_ma7" in window else pd.Series(dtype=float)
     avg_weight = float(ma.iloc[-1]) if not ma.empty else None
 
-    # Rate from the moving-average slope, scaled to kg/week.
-    slope = _slope_per_day(window["weight_ma7"]) if "weight_ma7" in window else None
-    rate = slope * 7 if slope is not None else None
+    # Rate from the moving-average slope, scaled to kg/week — but only once
+    # there are enough weigh-ins spanning enough days to be meaningful.
+    rate = None
+    if "weight_kg" in window:
+        weighed = window.dropna(subset=["weight_kg"])
+        n_weigh = len(weighed)
+        span = ((weighed["date"].iloc[-1] - weighed["date"].iloc[0]).days
+                if n_weigh else 0)
+        if n_weigh >= MIN_RATE_WEIGHINS and span >= MIN_RATE_SPAN_DAYS:
+            slope = _slope_per_day(window["weight_ma7"])
+            rate = slope * 7 if slope is not None else None
 
     expenditure = None
     if "total_calories" in window:
@@ -93,8 +107,9 @@ class Status:
 def status_read(df: pd.DataFrame, head: Headline) -> Status:
     """Interpret the rate of change into a status + one-line nudge."""
     if head.rate_kg_per_week is None:
-        return Status("unknown", "Not enough data",
-                      "Log a few more days of weight to establish a trend.")
+        return Status("unknown", "Building your trend",
+                      "A reliable weekly rate needs ~10+ days of regular weigh-ins — "
+                      "keep logging daily and it'll appear here.")
 
     loss = -head.rate_kg_per_week  # positive = losing
 
