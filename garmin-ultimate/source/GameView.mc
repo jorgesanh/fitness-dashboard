@@ -43,8 +43,7 @@ class GameView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, h * 0.12, Graphics.FONT_XTINY,
             now.hour.format("%d") + ":" + now.min.format("%02d"), c);
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.25, Graphics.FONT_MEDIUM, game.matchTime(), c);
+        drawMatchClock(dc, w / 2, h * 0.25, game.matchTime());
 
         // Score: us green, them red
         dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
@@ -61,6 +60,29 @@ class GameView extends WatchUi.View {
         dc.drawText(w / 2, h * 0.82, Graphics.FONT_SMALL,
             "G " + game.goals + "   A " + game.assists, c);
     }
+}
+
+// Match time with a small stopwatch icon to its left, centred together on cx.
+function drawMatchClock(dc, cx, cy, text) {
+    var font = Graphics.FONT_MEDIUM;
+    var r = dc.getFontHeight(font) * 0.28;  // stopwatch radius
+    var gap = r * 0.8;
+    var textW = dc.getTextWidthInPixels(text, font);
+    var left = cx - (2 * r + gap + textW) / 2;
+    var ix = left + r;
+    var iy = cy + r * 0.15;
+
+    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+    dc.setPenWidth(2);
+    dc.drawCircle(ix, iy, r);
+    dc.drawLine(ix, iy, ix, iy - r * 0.6);         // hand
+    dc.drawLine(ix, iy, ix + r * 0.45, iy);
+    dc.setPenWidth(1);
+    dc.fillRectangle(ix - r * 0.3, iy - r * 1.45, r * 0.6, r * 0.3);  // button
+    dc.drawLine(ix, iy - r * 1.2, ix, iy - r);
+
+    dc.drawText(left + 2 * r + gap, cy, font, text,
+        Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
 }
 
 // UP = us +1, DOWN = them +1, START (or BACK) = menu.
