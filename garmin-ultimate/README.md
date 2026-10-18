@@ -21,7 +21,7 @@ One screen, nothing else:
 | **Tap green score** | +1 us |
 | **Tap red score** | +1 them |
 
-"My goal" and "My assist" also add a point to your team, so don't press UP as well. Use UP only when a teammate scores without you. Swipes are ignored, so brushing the screen can't change the score.
+"My goal" and "My assist" also add a point to your team, so don't press UP as well. Use UP only when a teammate scores without you. Swipes are ignored, and after anything is added the app ignores new scores for 1 second, so a double tap only counts once. End match shows the final score with a flying frisbee; any button closes the app.
 
 ## Install on your watch
 

@@ -63,20 +63,26 @@ class GameView extends WatchUi.View {
     }
 }
 
-// UP = us +1, DOWN = them +1, START (or BACK) = menu
-class GameDelegate extends WatchUi.BehaviorDelegate {
+// UP = us +1, DOWN = them +1, START (or BACK) = menu.
+// Tap the green score = us +1, tap the red score = them +1.
+// Plain InputDelegate (not BehaviorDelegate), so a tap isn't turned into "select".
+class GameDelegate extends WatchUi.InputDelegate {
     function initialize() {
-        BehaviorDelegate.initialize();
+        InputDelegate.initialize();
     }
 
-    function onPreviousPage() { return bump(:us); }
-    function onNextPage() { return bump(:them); }
-    function onSelect() { openMenu(); return true; }
-    function onMenu() { openMenu(); return true; }
-    // BACK opens the menu so a stray press doesn't end the match.
-    function onBack() { openMenu(); return true; }
+    function onKey(evt) {
+        var key = evt.getKey();
+        if (key == WatchUi.KEY_UP) { return bump(:us); }
+        if (key == WatchUi.KEY_DOWN) { return bump(:them); }
+        // START, or BACK, so a stray press doesn't end the match.
+        if (key == WatchUi.KEY_ENTER || key == WatchUi.KEY_ESC || key == WatchUi.KEY_MENU) {
+            openMenu();
+            return true;
+        }
+        return false;
+    }
 
-    // Touch: tap a score to add a point (green/left = us, red/right = them).
     function onTap(evt) {
         var xy = evt.getCoordinates();
         var screen = System.getDeviceSettings();
@@ -91,7 +97,16 @@ class GameDelegate extends WatchUi.BehaviorDelegate {
     function onSwipe(evt) { return true; }
 }
 
+var lastBumpMs = null;
+
+// Add a point/goal/assist. Ignored if anything was added less than a second ago,
+// so a double tap or double press can't count twice.
 function bump(what) {
+    var now = System.getTimer();
+    if (lastBumpMs != null && now - lastBumpMs < 1000) {
+        return true;
+    }
+    lastBumpMs = now;
     getGame().add(what);
     if (Attention has :vibrate) {
         Attention.vibrate([new Attention.VibeProfile(70, 150)]);
@@ -117,7 +132,8 @@ class MenuDelegate extends WatchUi.Menu2InputDelegate {
     function onSelect(item) {
         var id = item.getId();
         if (id == :exit) {
-            System.exit();
+            WatchUi.switchToView(new EndView(getGame()), new EndDelegate(), WatchUi.SLIDE_UP);
+            return;
         }
         if (id == :undo) {
             getGame().undo();
