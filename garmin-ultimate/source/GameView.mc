@@ -56,10 +56,10 @@ class GameView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Point " + game.pointTime(), c);
 
-        // My stats
+        // My stats: tap the left half for a goal, the right half for an assist
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.82, Graphics.FONT_SMALL,
-            "G " + game.goals + "   A " + game.assists, c);
+        dc.drawText(w * 0.38, h * 0.82, Graphics.FONT_SMALL, "G " + game.goals, c);
+        dc.drawText(w * 0.62, h * 0.82, Graphics.FONT_SMALL, "A " + game.assists, c);
     }
 }
 
@@ -75,6 +75,19 @@ class GameDelegate extends WatchUi.BehaviorDelegate {
     function onMenu() { openMenu(); return true; }
     // BACK opens the menu so a stray press doesn't end the match.
     function onBack() { openMenu(); return true; }
+
+    // Touch: tap the bottom of the screen to log my goal (left) or assist (right).
+    function onTap(evt) {
+        var xy = evt.getCoordinates();
+        var screen = System.getDeviceSettings();
+        if (xy[1] > screen.screenHeight * 0.7) {
+            return bump(xy[0] < screen.screenWidth / 2 ? :goal : :assist);
+        }
+        return true;  // ignore taps elsewhere
+    }
+
+    // Ignore swipes so a brushed screen can't change the score.
+    function onSwipe(evt) { return true; }
 }
 
 function bump(what) {
