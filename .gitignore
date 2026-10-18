@@ -21,3 +21,4 @@ secrets.local.toml
 
 # Supabase CLI local state
 supabase/
+garmin-ultimate/bin/
