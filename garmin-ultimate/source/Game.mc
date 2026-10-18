@@ -17,27 +17,24 @@ class Game {
     }
 
     function add(what) {
+        // My goal or assist is also a point for us.
         if (what == :us) { us++; }
         else if (what == :them) { them++; }
-        else if (what == :goal) { goals++; }
-        else if (what == :assist) { assists++; }
+        else if (what == :goal) { goals++; us++; }
+        else if (what == :assist) { assists++; us++; }
         _last.add(what);
-        if (what == :us || what == :them) {
-            _pointTimes.add(System.getTimer());
-        }
+        _pointTimes.add(System.getTimer());
     }
 
     function undo() {
         if (_last.size() == 0) { return; }
         var what = _last[_last.size() - 1];
         _last = _last.slice(0, _last.size() - 1);
-        if (what == :us || what == :them) {
-            _pointTimes = _pointTimes.slice(0, _pointTimes.size() - 1);
-        }
+        _pointTimes = _pointTimes.slice(0, _pointTimes.size() - 1);
         if (what == :us) { us--; }
         else if (what == :them) { them--; }
-        else if (what == :goal) { goals--; }
-        else if (what == :assist) { assists--; }
+        else if (what == :goal) { goals--; us--; }
+        else if (what == :assist) { assists--; us--; }
     }
 
     function matchTime() {
