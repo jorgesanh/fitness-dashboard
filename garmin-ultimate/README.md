@@ -6,6 +6,7 @@ One screen, nothing else:
         14:32          ← time of day
         23:41          ← match time (starts when you open the app)
      7        5        ← us (green)   them (red)
+      Point 1:12       ← time since the last point was added (resets to 0:00)
       G 2   A 3        ← my goals / assists
 ```
 

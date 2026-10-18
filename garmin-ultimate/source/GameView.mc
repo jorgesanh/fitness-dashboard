@@ -5,7 +5,7 @@ import Toybox.System;
 import Toybox.Timer;
 import Toybox.WatchUi;
 
-// One screen: time of day, match clock, the score, my goals/assists.
+// One screen: time of day, match clock, the score, point clock, my goals/assists.
 class GameView extends WatchUi.View {
     hidden var _timer = null;
 
@@ -52,9 +52,13 @@ class GameView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w * 0.7, h * 0.5, Graphics.FONT_NUMBER_HOT, game.them.toString(), c);
 
+        // Time since last point
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Point " + game.pointTime(), c);
+
         // My stats
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.76, Graphics.FONT_SMALL,
+        dc.drawText(w / 2, h * 0.82, Graphics.FONT_SMALL,
             "G " + game.goals + "   A " + game.assists, c);
     }
 }
