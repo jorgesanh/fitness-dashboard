@@ -7,7 +7,7 @@ One screen, nothing else:
         23:41          ← match time (starts when you open the app)
      7        5        ← us (green)   them (red)
       Point 1:12       ← time since the last point was added (resets to 0:00)
-      G 2   A 3        ← my goals / assists (tap to add)
+      G 2   A 3        ← my goals / assists
 ```
 
 ## Buttons
@@ -18,8 +18,8 @@ One screen, nothing else:
 | **DOWN** | +1 them |
 | **START** (or BACK) | My goal · My assist · Undo last · End match |
 
-| **Tap G** (bottom left of screen) | My goal |
-| **Tap A** (bottom right of screen) | My assist |
+| **Tap green score** | +1 us |
+| **Tap red score** | +1 them |
 
 "My goal" and "My assist" also add a point to your team, so don't press UP as well. Use UP only when a teammate scores without you. Swipes are ignored, so brushing the screen can't change the score.
 
