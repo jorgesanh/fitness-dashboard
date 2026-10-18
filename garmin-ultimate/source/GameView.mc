@@ -1,3 +1,4 @@
+import Toybox.Application;
 import Toybox.Attention;
 import Toybox.Graphics;
 import Toybox.Lang;
@@ -54,10 +55,10 @@ class GameView extends WatchUi.View {
         // Time since last point (or a prompt before the match starts)
         if (game.isStarted()) {
             dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Point " + game.pointTime(), c);
+            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, tr(Rez.Strings.Point) + " " + game.pointTime(), c);
         } else {
             dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Press START", c);
+            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, tr(Rez.Strings.PressStart), c);
         }
 
         // My stats
@@ -156,13 +157,18 @@ function bump(what) {
     return true;
 }
 
+function tr(id) {
+    return WatchUi.loadResource(id);
+}
+
 function openMenu() {
-    var menu = new WatchUi.Menu2({ :title => "Me" });
-    menu.addItem(new WatchUi.MenuItem("My goal", null, :goal, null));
-    menu.addItem(new WatchUi.MenuItem("My assist", null, :assist, null));
-    menu.addItem(new WatchUi.MenuItem("Undo last", null, :undo, null));
-    menu.addItem(new WatchUi.MenuItem("End match", null, :exit, null));
-    menu.addItem(new WatchUi.MenuItem("How to use", null, :help, null));
+    var menu = new WatchUi.Menu2({ :title => tr(Rez.Strings.Menu) });
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.MyGoal), null, :goal, null));
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.MyAssist), null, :assist, null));
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.UndoLast), null, :undo, null));
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.EndMatch), null, :exit, null));
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.ResetMatch), null, :reset, null));
+    menu.addItem(new WatchUi.MenuItem(tr(Rez.Strings.HowTo), null, :help, null));
     WatchUi.pushView(menu, new MenuDelegate(), WatchUi.SLIDE_UP);
 }
 
@@ -175,6 +181,14 @@ class MenuDelegate extends WatchUi.Menu2InputDelegate {
         var id = item.getId();
         if (id == :exit) {
             WatchUi.switchToView(new EndView(getGame()), new EndDelegate(), WatchUi.SLIDE_UP);
+            return;
+        }
+        if (id == :reset) {
+            // First confirmation replaces this menu.
+            var ask = new WatchUi.Menu2({ :title => tr(Rez.Strings.ResetAsk) });
+            ask.addItem(new WatchUi.MenuItem(tr(Rez.Strings.ResetNo), null, :no, null));
+            ask.addItem(new WatchUi.MenuItem(tr(Rez.Strings.ResetYes), null, :yes, null));
+            WatchUi.switchToView(ask, new ResetAskDelegate(), WatchUi.SLIDE_LEFT);
             return;
         }
         if (id == :help) {
@@ -190,19 +204,53 @@ class MenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
+// Reset step 1: "Reset match?" No (default, listed first) / Yes.
+class ResetAskDelegate extends WatchUi.Menu2InputDelegate {
+    function initialize() {
+        Menu2InputDelegate.initialize();
+    }
+
+    function onSelect(item) {
+        if (item.getId() == :yes) {
+            // Step 2 replaces this menu; when it closes we're back on the game screen.
+            WatchUi.switchToView(new WatchUi.Confirmation(tr(Rez.Strings.ResetSure)),
+                new ResetConfirmDelegate(), WatchUi.SLIDE_IMMEDIATE);
+        } else {
+            WatchUi.popView(WatchUi.SLIDE_DOWN);
+        }
+    }
+}
+
+class ResetConfirmDelegate extends WatchUi.ConfirmationDelegate {
+    function initialize() {
+        ConfirmationDelegate.initialize();
+    }
+
+    function onResponse(response) {
+        if (response == WatchUi.CONFIRM_YES) {
+            var app = Application.getApp() as UltimateApp;
+            app.game = new Game();
+            lastBumpMs = null;
+            WatchUi.requestUpdate();
+        }
+        return true;
+    }
+}
+
 // Short instructions, one per row; BACK returns to the menu.
 function openHelp() {
-    var menu = new WatchUi.Menu2({ :title => "How to use" });
+    var menu = new WatchUi.Menu2({ :title => tr(Rez.Strings.HowTo) });
     var rows = [
-        ["START", "Start the match"],
-        ["UP or tap green", "+1 my team"],
-        ["DOWN or tap red", "+1 other team"],
-        ["START or BACK", "Open the menu"],
-        ["My goal / assist", "Also +1 my team"],
-        ["Undo last", "Remove last entry"]
+        [Rez.Strings.H1a, Rez.Strings.H1b],
+        [Rez.Strings.H2a, Rez.Strings.H2b],
+        [Rez.Strings.H3a, Rez.Strings.H3b],
+        [Rez.Strings.H4a, Rez.Strings.H4b],
+        [Rez.Strings.H5a, Rez.Strings.H5b],
+        [Rez.Strings.H6a, Rez.Strings.H6b],
+        [Rez.Strings.H7a, Rez.Strings.H7b]
     ];
     for (var i = 0; i < rows.size(); i++) {
-        menu.addItem(new WatchUi.MenuItem(rows[i][0], rows[i][1], i, null));
+        menu.addItem(new WatchUi.MenuItem(tr(rows[i][0]), tr(rows[i][1]), i, null));
     }
     WatchUi.pushView(menu, new HelpDelegate(), WatchUi.SLIDE_LEFT);
 }

@@ -1,0 +1,30 @@
+<strings>
+    <string id="AppName">Ultimate Score</string>
+    <string id="PressStart">Pulsa START</string>
+    <string id="Point">Punto</string>
+    <string id="Menu">Menú</string>
+    <string id="MyGoal">Mi gol</string>
+    <string id="MyAssist">Mi asistencia</string>
+    <string id="UndoLast">Deshacer último</string>
+    <string id="EndMatch">Terminar partido</string>
+    <string id="ResetMatch">Reiniciar partido</string>
+    <string id="HowTo">Cómo usar</string>
+    <string id="ResetAsk">¿Reiniciar partido?</string>
+    <string id="ResetNo">No, seguir jugando</string>
+    <string id="ResetYes">Sí, reiniciar</string>
+    <string id="ResetSure">¿Seguro? Se perderá el marcador</string>
+    <string id="H1a">START</string>
+    <string id="H1b">Empezar el partido</string>
+    <string id="H2a">ARRIBA o toca verde</string>
+    <string id="H2b">+1 mi equipo</string>
+    <string id="H3a">ABAJO o toca rojo</string>
+    <string id="H3b">+1 equipo rival</string>
+    <string id="H4a">START o ATRÁS</string>
+    <string id="H4b">Abrir el menú</string>
+    <string id="H5a">Mi gol / asistencia</string>
+    <string id="H5b">También +1 mi equipo</string>
+    <string id="H6a">Deshacer último</string>
+    <string id="H6b">Quitar lo último</string>
+    <string id="H7a">Reiniciar partido</string>
+    <string id="H7b">Volver a 0-0</string>
+</strings>

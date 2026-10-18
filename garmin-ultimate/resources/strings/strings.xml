@@ -1,3 +1,30 @@
 <strings>
     <string id="AppName">Ultimate Score</string>
+    <string id="PressStart">Press START</string>
+    <string id="Point">Point</string>
+    <string id="Menu">Menu</string>
+    <string id="MyGoal">My goal</string>
+    <string id="MyAssist">My assist</string>
+    <string id="UndoLast">Undo last</string>
+    <string id="EndMatch">End match</string>
+    <string id="ResetMatch">Reset match</string>
+    <string id="HowTo">How to use</string>
+    <string id="ResetAsk">Reset match?</string>
+    <string id="ResetNo">No, keep playing</string>
+    <string id="ResetYes">Yes, reset</string>
+    <string id="ResetSure">Sure? The score will be lost</string>
+    <string id="H1a">START</string>
+    <string id="H1b">Start the match</string>
+    <string id="H2a">UP or tap green</string>
+    <string id="H2b">+1 my team</string>
+    <string id="H3a">DOWN or tap red</string>
+    <string id="H3b">+1 other team</string>
+    <string id="H4a">START or BACK</string>
+    <string id="H4b">Open the menu</string>
+    <string id="H5a">My goal / assist</string>
+    <string id="H5b">Also +1 my team</string>
+    <string id="H6a">Undo last</string>
+    <string id="H6b">Remove last entry</string>
+    <string id="H7a">Reset match</string>
+    <string id="H7b">Back to 0-0</string>
 </strings>
