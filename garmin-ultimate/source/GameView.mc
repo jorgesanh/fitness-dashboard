@@ -65,7 +65,7 @@ class GameView extends WatchUi.View {
 // Match time with a small stopwatch icon to its left, centred together on cx.
 function drawMatchClock(dc, cx, cy, text) {
     var font = Graphics.FONT_MEDIUM;
-    var r = dc.getFontHeight(font) * 0.28;  // stopwatch radius
+    var r = dc.getFontHeight(font) * 0.22;  // stopwatch radius
     var gap = r * 0.8;
     var textW = dc.getTextWidthInPixels(text, font);
     var left = cx - (2 * r + gap + textW) / 2;
