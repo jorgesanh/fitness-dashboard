@@ -51,9 +51,14 @@ class GameView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w * 0.7, h * 0.5, Graphics.FONT_NUMBER_HOT, game.them.toString(), c);
 
-        // Time since last point
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Point " + game.pointTime(), c);
+        // Time since last point (or a prompt before the match starts)
+        if (game.isStarted()) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Point " + game.pointTime(), c);
+        } else {
+            dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, h * 0.69, Graphics.FONT_XTINY, "Press START", c);
+        }
 
         // My stats
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
@@ -95,6 +100,16 @@ class GameDelegate extends WatchUi.InputDelegate {
 
     function onKey(evt) {
         var key = evt.getKey();
+        var game = getGame();
+        // First START press kicks off the match.
+        if (!game.isStarted() && key == WatchUi.KEY_ENTER) {
+            game.start();
+            if (Attention has :vibrate) {
+                Attention.vibrate([new Attention.VibeProfile(100, 400)]);
+            }
+            WatchUi.requestUpdate();
+            return true;
+        }
         if (key == WatchUi.KEY_UP) { return bump(:us); }
         if (key == WatchUi.KEY_DOWN) { return bump(:them); }
         // START, or BACK, so a stray press doesn't end the match.
@@ -124,6 +139,10 @@ var lastBumpMs = null;
 // Add a point/goal/assist. Ignored if anything was added less than a second ago,
 // so a double tap or double press can't count twice.
 function bump(what) {
+    // No scoring before the match starts.
+    if (!getGame().isStarted()) {
+        return true;
+    }
     var now = System.getTimer();
     if (lastBumpMs != null && now - lastBumpMs < 1000) {
         return true;

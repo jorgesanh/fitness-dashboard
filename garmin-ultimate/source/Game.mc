@@ -8,12 +8,19 @@ class Game {
     var goals = 0;
     var assists = 0;
 
-    hidden var _startMs;
+    hidden var _startMs = null;  // null until START is pressed
     hidden var _last = [];  // names of changed counters, newest last, for undo
     hidden var _pointTimes = [];  // when each team point was added, for the point clock
 
     function initialize() {
+    }
+
+    function start() {
         _startMs = System.getTimer();
+    }
+
+    function isStarted() {
+        return _startMs != null;
     }
 
     function add(what) {
@@ -38,11 +45,12 @@ class Game {
     }
 
     function matchTime() {
-        return formatTime(System.getTimer() - _startMs);
+        return isStarted() ? formatTime(System.getTimer() - _startMs) : "0:00";
     }
 
     // Time since the last team point (or since kickoff), so you can see a point registered.
     function pointTime() {
+        if (!isStarted()) { return "0:00"; }
         var since = _pointTimes.size() > 0 ? _pointTimes[_pointTimes.size() - 1] : _startMs;
         return formatTime(System.getTimer() - since);
     }

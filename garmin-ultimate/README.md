@@ -4,7 +4,7 @@ One screen, nothing else:
 
 ```
         14:32          ← time of day
-        23:41          ← match time (starts when you open the app)
+        23:41          ← match time (starts when you press START)
      7        5        ← us (green)   them (red)
       Point 1:12       ← time since the last point was added (resets to 0:00)
       G 2   A 3        ← my goals / assists
@@ -16,6 +16,7 @@ One screen, nothing else:
 |---|---|
 | **UP** | +1 us |
 | **DOWN** | +1 them |
+| **START** | First press starts the match. After that: |
 | **START** (or BACK) | My goal · My assist · Undo last · End match |
 
 | **Tap green score** | +1 us |
