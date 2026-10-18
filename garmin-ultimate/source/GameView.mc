@@ -162,6 +162,7 @@ function openMenu() {
     menu.addItem(new WatchUi.MenuItem("My assist", null, :assist, null));
     menu.addItem(new WatchUi.MenuItem("Undo last", null, :undo, null));
     menu.addItem(new WatchUi.MenuItem("End match", null, :exit, null));
+    menu.addItem(new WatchUi.MenuItem("How to use", null, :help, null));
     WatchUi.pushView(menu, new MenuDelegate(), WatchUi.SLIDE_UP);
 }
 
@@ -176,11 +177,41 @@ class MenuDelegate extends WatchUi.Menu2InputDelegate {
             WatchUi.switchToView(new EndView(getGame()), new EndDelegate(), WatchUi.SLIDE_UP);
             return;
         }
+        if (id == :help) {
+            openHelp();
+            return;
+        }
         if (id == :undo) {
             getGame().undo();
         } else {
             bump(id);
         }
         WatchUi.popView(WatchUi.SLIDE_DOWN);
+    }
+}
+
+// Short instructions, one per row; BACK returns to the menu.
+function openHelp() {
+    var menu = new WatchUi.Menu2({ :title => "How to use" });
+    var rows = [
+        ["START", "Start the match"],
+        ["UP or tap green", "+1 my team"],
+        ["DOWN or tap red", "+1 other team"],
+        ["START or BACK", "Open the menu"],
+        ["My goal / assist", "Also +1 my team"],
+        ["Undo last", "Remove last entry"]
+    ];
+    for (var i = 0; i < rows.size(); i++) {
+        menu.addItem(new WatchUi.MenuItem(rows[i][0], rows[i][1], i, null));
+    }
+    WatchUi.pushView(menu, new HelpDelegate(), WatchUi.SLIDE_LEFT);
+}
+
+class HelpDelegate extends WatchUi.Menu2InputDelegate {
+    function initialize() {
+        Menu2InputDelegate.initialize();
+    }
+
+    function onSelect(item) {
     }
 }
