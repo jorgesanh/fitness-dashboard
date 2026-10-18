@@ -1,8 +1,3 @@
 <strings>
     <string id="AppName">Ultimate Score</string>
-    <string id="FitUs">Our score</string>
-    <string id="FitThem">Their score</string>
-    <string id="FitGoals">My goals</string>
-    <string id="FitAssists">My assists</string>
-    <string id="FitPts">pts</string>
 </strings>

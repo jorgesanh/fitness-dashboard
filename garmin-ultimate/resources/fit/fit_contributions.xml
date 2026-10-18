@@ -1,6 +1,0 @@
-<fitContributions>
-    <fitField id="0" displayInChart="false" displayInActivitySummary="true" sortOrder="0" precision="0" dataLabel="@Strings.FitUs" unitLabel="@Strings.FitPts"/>
-    <fitField id="1" displayInChart="false" displayInActivitySummary="true" sortOrder="1" precision="0" dataLabel="@Strings.FitThem" unitLabel="@Strings.FitPts"/>
-    <fitField id="2" displayInChart="false" displayInActivitySummary="true" sortOrder="2" precision="0" dataLabel="@Strings.FitGoals" unitLabel="@Strings.FitPts"/>
-    <fitField id="3" displayInChart="false" displayInActivitySummary="true" sortOrder="3" precision="0" dataLabel="@Strings.FitAssists" unitLabel="@Strings.FitPts"/>
-</fitContributions>
